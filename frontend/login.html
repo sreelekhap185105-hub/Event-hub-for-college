@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login - Event Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Poppins', sans-serif;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #1e1e2f, #2e005f, #160040);
+    color: #fff;
+    position: relative;
+  }
+
+  /* Animated gradient background overlay */
+  body::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(45deg, #ff00cc, #3333ff, #00ffff);
+    background-size: 300% 300%;
+    animation: gradientMove 10s ease infinite;
+    z-index: 0;
+    opacity: 0.15;
+  }
+
+  @keyframes gradientMove {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  /* Floating particles */
+  .particles {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+  }
+  .particles span {
+    position: absolute;
+    width: 10px; height: 10px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 50%;
+    animation: float 15s linear infinite;
+    bottom: -150px;
+  }
+  @keyframes float {
+    0% { transform: translateY(0) scale(0); opacity: 0; }
+    50% { opacity: 1; }
+    100% { transform: translateY(-800px) scale(1.2); opacity: 0; }
+  }
+  .particles span:nth-child(1){ left:20%; animation-delay:0s; }
+  .particles span:nth-child(2){ left:40%; animation-delay:3s; width:15px; height:15px; }
+  .particles span:nth-child(3){ left:60%; animation-delay:5s; }
+  .particles span:nth-child(4){ left:80%; animation-delay:7s; width:20px; height:20px; }
+  .particles span:nth-child(5){ left:30%; animation-delay:2s; width:25px; height:25px; }
+
+  h1.page-title {
+    position: absolute;
+    top: 40px;
+    width: 100%;
+    text-align: center;
+    font-size: 2.6rem;
+    background: linear-gradient(90deg, #a855f7, #22d3ee, #ff6ec4);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer 5s linear infinite;
+    z-index: 2;
+  }
+  @keyframes shimmer {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  .login-container {
+    position: relative;
+    z-index: 2;
+    width: 90%;
+    max-width: 400px;
+    padding: 2.5rem 2rem;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    backdrop-filter: blur(25px);
+    box-shadow: 0 0 25px rgba(255,255,255,0.15);
+    text-align: center;
+    animation: fadeUp 1.5s ease;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(40px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .login-container h2 {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(90deg, #00eaff, #b26eff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .intro-text {
+    color: #d1d1d1;
+    font-size: 0.95rem;
+    margin-bottom: 1.8rem;
+  }
+
+  form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  input, select {
+    padding: 0.8rem 1rem;
+    border-radius: 12px;
+    border: none;
+    font-size: 1rem;
+    outline: none;
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    appearance: none;
+    transition: all 0.3s ease;
+  }
+
+  input::placeholder {
+    color: rgba(255,255,255,0.7);
+  }
+
+  select option {
+    background-color: #2a004f;
+    color: #fff;
+  }
+
+  input:focus, select:focus {
+    background: rgba(255,255,255,0.25);
+    box-shadow: 0 0 15px rgba(255,255,255,0.2);
+    transform: scale(1.02);
+  }
+
+  button {
+    margin-top: 1rem;
+    padding: 0.9rem;
+    border: none;
+    border-radius: 50px;
+    font-weight: 600;
+    font-size: 1rem;
+    background: linear-gradient(90deg, #7f00ff, #e100ff);
+    color: #fff;
+    cursor: pointer;
+    transition: all 0.4s ease;
+    box-shadow: 0 0 10px rgba(255, 0, 255, 0.3);
+  }
+
+  button:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 20px rgba(255, 0, 255, 0.5);
+    background: linear-gradient(90deg, #00eaff, #7f00ff);
+  }
+
+  .footer-text {
+    margin-top: 1.5rem;
+    font-size: 0.9rem;
+    color: #ccc;
+  }
+
+  .message {
+    color: #ff6666;
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+  }
+
+  .error {
+    border: 1px solid #ff5f5f !important;
+    box-shadow: 0 0 10px rgba(255, 99, 99, 0.3);
+  }
+
+  @media (max-width: 480px) {
+    h1.page-title {
+      font-size: 2rem;
+      top: 20px;
+    }
+    .login-container {
+      padding: 2rem 1.2rem;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="particles">
+  <span></span><span></span><span></span><span></span><span></span>
+</div>
+
+
+
+<div class="login-container">
+  <h2>Login</h2>
+  <p class="intro-text">Welcome! Please select your role and login to manage or book events efficiently.</p>
+  <form id="loginForm">
+    <select id="roleSelect" class="role-select" required>
+      <option value="" disabled selected>Select Role</option>
+      <option value="student">Student</option>
+      <option value="teacher">Teacher</option>
+    </select>
+    <input type="text" id="username" placeholder="Enter Username" required>
+    <input type="password" id="password" placeholder="Enter Password" required>
+    <button type="submit">Login</button>
+    <p class="message" id="errorMessage"></p>
+  </form>
+  <p class="footer-text">Event Management System</p>
+</div>
+
+<script>
+  const loginForm = document.getElementById('loginForm');
+  const errorMessage = document.getElementById('errorMessage');
+  const usernameInput = document.getElementById('username');
+  const passwordInput = document.getElementById('password');
+  const roleSelect = document.getElementById('roleSelect');
+
+  loginForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const role = roleSelect.value;
+    const username = usernameInput.value.trim();
+    const password = passwordInput.value.trim();
+
+    usernameInput.classList.remove('error');
+    passwordInput.classList.remove('error');
+    roleSelect.classList.remove('error');
+    errorMessage.innerText = '';
+
+    if(!role || !username || !password){
+      errorMessage.innerText = 'Please fill all fields.';
+      if(!role) roleSelect.classList.add('error');
+      if(!username) usernameInput.classList.add('error');
+      if(!password) passwordInput.classList.add('error');
+      return;
+    }
+
+    if(role === 'student'){
+      localStorage.setItem('username', username);
+      localStorage.setItem('role', 'student');
+      window.location.href = 'event.html';
+    }
+    else if(role === 'teacher'){
+      if(password === 'ait2025'){
+        localStorage.setItem('username', username);
+        localStorage.setItem('role', 'teacher');
+        window.location.href = 'event.html';
+      } else {
+        errorMessage.innerText = 'Invalid teacher password!';
+        passwordInput.classList.add('error');
+      }
+    }
+  });
+</script>
+
+<script>
+  const API_BASE = (window.API_BASE || 'http://localhost:5000');
+  const form = document.querySelector('form');
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = (document.querySelector('input[type=email]')||document.getElementById('email')||{value:''}).value;
+      const password = (document.querySelector('input[type=password]')||document.getElementById('password')||{value:''}).value;
+      const res = await fetch(API_BASE + '/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const out = await res.json();
+      if (res.ok) {
+        localStorage.setItem('auth', JSON.stringify(out));
+        alert('Login successful');
+        window.location.href = 'index.html';
+      } else {
+        alert(out.error || 'Login failed');
+      }
+    });
+  }
+</script>
+
+</body>
+</html>

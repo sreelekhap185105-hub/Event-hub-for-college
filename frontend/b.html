@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bookings</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+<style>
+  body { font-family:'Inter', sans-serif; background:#f6f0ff; padding:2rem; }
+  h1 { font-size:2.5rem; margin-bottom:1rem; background:linear-gradient(90deg,#4e54c8,#8f94fb); -webkit-background-clip:text; -webkit-text-fill-color:transparent; text-align:center; }
+
+  /* Navbar */
+  nav { display:flex; gap:1rem; margin-bottom:2rem; justify-content:center; flex-wrap:wrap; }
+  nav a { text-decoration:none; color:#4e54c8; font-weight:600; padding:0.5rem 1rem; border-radius:10px; transition:0.3s; background:#fff; box-shadow:0 5px 15px rgba(0,0,0,0.1); }
+  nav a:hover { background:#4e54c8; color:#fff; }
+
+  /* Search & buttons */
+  #searchContainer { text-align:center; margin-bottom:2rem; }
+  #searchInput { padding:0.6rem 1rem; width:300px; border-radius:10px; border:1px solid #ccc; font-size:1rem; }
+  #downloadCsvBtn, #analyticsDashboardBtn { margin-left:10px; padding:0.5rem 1rem; border-radius:8px; background:#4e54c8; color:#fff; border:none; cursor:pointer; }
+  #downloadCsvBtn:hover, #analyticsDashboardBtn:hover { background:#8f94fb; }
+
+  /* Table styling */
+  table { width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 10px 20px rgba(0,0,0,0.1); }
+  thead { background:#4e54c8; color:#fff; }
+  th, td { padding:1rem; text-align:left; border:1px solid #ddd; vertical-align:middle; font-size:0.95rem; }
+  th { font-weight:600; position:sticky; top:0; z-index:1; }
+  tbody tr:hover { background:#f0f0ff; }
+
+  /* QR canvas */
+  canvas { display:block; margin:0 auto; }
+
+  /* Remove button */
+  button.remove-btn { padding:0.35rem 0.7rem; border:none; border-radius:5px; background:#ff4d4d; color:#fff; cursor:pointer; transition:0.3s; font-size:0.9rem; }
+  button.remove-btn:hover { background:#ff1a1a; }
+
+  /* Responsive */
+  @media(max-width:1024px){
+    table, th, td { font-size:0.85rem; }
+    #searchInput { width:90%; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Bookings</h1>
+
+<nav id="navbar"></nav>
+
+<div id="searchContainer" style="display:none;">
+  <input type="text" id="searchInput" placeholder="Search bookings...">
+  <button id="downloadCsvBtn">Download CSV</button>
+  <button id="analyticsDashboardBtn">View Analytics Dashboard</button>
+</div>
+
+<div style="overflow-x:auto;">
+  <table id="bookingTable">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Class</th>
+        <th>Email</th>
+        <th>Event</th>
+        <th>Date</th>
+        <th>Booking ID</th>
+        <th>QR Code</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<script>
+const username = localStorage.getItem('username');
+const role = localStorage.getItem('role');
+
+// Navbar
+const navbar = document.getElementById('navbar');
+if(role === 'teacher'){
+  navbar.innerHTML = `
+    <a href="event.html">Events</a>
+    <a href="bookings.html">All Bookings</a>
+    <a href="add-event.html">Add Event</a>
+    <a href="scanner.html">QR Scanner</a>
+    <a href="profile.html">Profile</a>
+  `;
+} else {
+  navbar.innerHTML = `
+    <a href="event.html">Events</a>
+    <a href="bookings.html">My Bookings</a>
+    <a href="profile.html">Profile</a>
+  `;
+}
+
+// Load bookings
+let allBookings = JSON.parse(localStorage.getItem('bookingsList')) || [];
+const tableBody = document.querySelector('#bookingTable tbody');
+
+// Initial filter based on role
+let displayBookings = role === 'teacher' ? allBookings : allBookings.filter(b => b.student === username);
+
+// Show search input and buttons for teachers
+const searchContainer = document.getElementById('searchContainer');
+if(role === 'teacher'){
+  searchContainer.style.display = 'block';
+}
+
+// Render bookings table
+function renderTable() {
+  tableBody.innerHTML = '';
+  displayBookings.forEach((b, index) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${b.student}</td>
+      <td>${b.studentClass || '-'}</td>
+      <td>${b.email}</td>
+      <td>${b.event}</td>
+      <td>${b.date}</td>
+      <td>${b.qrCode}</td>
+      <td><canvas></canvas></td>
+      <td>${role === 'teacher' ? `<button class="remove-btn" data-index="${index}">Remove</button>` : ''}</td>
+    `;
+    tableBody.appendChild(tr);
+
+    // Generate QR
+    const canvas = tr.querySelector('canvas');
+    const qrText = JSON.stringify({ bookingID: b.qrCode, student: b.student, event: b.event, class: b.studentClass });
+    QRCode.toCanvas(canvas, qrText, { width:80 });
+
+    // Remove button for teachers
+    if(role === 'teacher'){
+      const removeBtn = tr.querySelector('.remove-btn');
+      removeBtn.addEventListener('click', () => {
+        if(confirm(`Remove booking of ${b.student} for "${b.event}"?`)){
+          allBookings = allBookings.filter(x => x.qrCode !== b.qrCode);
+          localStorage.setItem('bookingsList', JSON.stringify(allBookings));
+          displayBookings = role === 'teacher' ? allBookings : allBookings.filter(x => x.student === username);
+          renderTable();
+        }
+      });
+    }
+  });
+}
+
+// Initial render
+renderTable();
+
+// Search functionality
+if(role === 'teacher'){
+  const searchInput = document.getElementById('searchInput');
+  searchInput.addEventListener('input', function() {
+    const term = this.value.toLowerCase().trim();
+    displayBookings = allBookings.filter(b =>
+      (b.event && b.event.toLowerCase().includes(term)) ||
+      (b.student && b.student.toLowerCase().includes(term)) ||
+      (b.studentClass && b.studentClass.toLowerCase().includes(term)) ||
+      (b.email && b.email.toLowerCase().includes(term)) ||
+      (b.date && b.date.toLowerCase().includes(term)) ||
+      (b.qrCode && b.qrCode.toLowerCase().includes(term))
+    );
+    renderTable();
+  });
+
+  // CSV Download
+  const downloadBtn = document.getElementById('downloadCsvBtn');
+  downloadBtn.addEventListener('click', (event) => {
+    event.preventDefault(); // Prevent any default navigation
+    if(displayBookings.length === 0){
+      alert("No bookings to download!");
+      return;
+    }
+    const headers = ['Name', 'Class', 'Email', 'Event', 'Date', 'Booking ID'];
+    const rows = displayBookings.map(b => [b.student, b.studentClass||'', b.email, b.event, b.date, b.qrCode]);
+    const csvContent = [headers, ...rows].map(r=>r.map(i=>`"${i}"`).join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'bookings.csv';
+    link.click();
+    URL.revokeObjectURL(link.href);
+  });
+
+  // Analytics Dashboard
+  const analyticsBtn = document.getElementById('analyticsDashboardBtn');
+  analyticsBtn.addEventListener('click', () => {
+    window.location.href = 'analytics.html';
+  });
+
+} else {
+  // Students see only their own bookings
+  displayBookings = allBookings.filter(b => b.student === username);
+}
+</script>
+
+</body>
+</html>

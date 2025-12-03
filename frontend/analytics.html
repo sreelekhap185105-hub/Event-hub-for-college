@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enhanced Analytics Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+<style>
+  /* --- Global CSS Variables for Theming --- */
+  :root {
+    --bg-color: #f6f0ff; /* Light BG */
+    --card-bg: #ffffff; /* Light Card BG */
+    --text-color: #111827;
+    --sub-text-color: #555;
+    --shadow-light: rgba(0,0,0,0.1);
+    --primary-color: #4e54c8;
+    --primary-gradient: linear-gradient(90deg, #4e54c8, #8f94fb);
+    --chart-border: #e2e8f0;
+  }
+  
+  /* Dark Theme Overrides */
+  .dark-mode {
+    --bg-color: #1e293b;
+    --card-bg: #334155;
+    --text-color: #f8fafc;
+    --sub-text-color: #cbd5e1;
+    --shadow-light: rgba(0,0,0,0.4);
+    --chart-border: #475569;
+  }
+
+  /* --- Base Styling --- */
+  body { 
+    font-family:'Inter', sans-serif; 
+    background:var(--bg-color); 
+    color:var(--text-color);
+    padding:2rem; 
+    margin:0; 
+    transition: background 0.3s, color 0.3s;
+  }
+  h1 { 
+    font-size:3rem; 
+    text-align:center; 
+    margin-bottom:1.5rem; 
+    background:var(--primary-gradient); 
+    -webkit-background-clip:text; 
+    -webkit-text-fill-color:transparent; 
+  }
+
+  /* --- Top Bar & Controls --- */
+  #top-bar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 2rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+  }
+
+  /* Navigation */
+  nav a { 
+    text-decoration:none; 
+    color:var(--primary-color); 
+    font-weight:600; 
+    padding:0.5rem 1rem; 
+    border-radius:10px; 
+    background:var(--card-bg); 
+    box-shadow:0 5px 15px var(--shadow-light); 
+    transition:0.3s; 
+  }
+  nav a:hover { background:var(--primary-color); color:#fff; }
+
+  /* Theme Switch */
+  #theme-toggle {
+    background: var(--card-bg);
+    border: 2px solid var(--primary-color);
+    color: var(--primary-color);
+    padding: 0.5rem 1rem;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s;
+    box-shadow:0 5px 15px var(--shadow-light); 
+  }
+  #theme-toggle:hover {
+    background: var(--primary-color);
+    color: #fff;
+  }
+
+  /* Summary Cards */
+  #summary { 
+    display:flex; 
+    justify-content:center; 
+    gap:2rem; 
+    margin-bottom:2rem; 
+    flex-wrap:wrap; 
+  }
+  .card { 
+    background:var(--card-bg); 
+    padding:1rem 1.5rem; 
+    border-radius:12px; 
+    box-shadow:0 8px 16px var(--shadow-light); 
+    text-align:center; 
+    min-width:160px;
+    flex: 1;
+    max-width: 300px;
+    transition: background 0.3s, box-shadow 0.3s;
+  }
+  .card h2 { margin:0; font-size:3rem; color:var(--primary-color); }
+  .card p { margin:0; font-size:1.2rem; color:var(--sub-text-color); }
+
+  /* Chart Layout (Stacked) */
+  #charts { 
+    display:flex; 
+    flex-direction:column; /* Stacked */
+    align-items:center; 
+    gap:2rem; 
+    max-width:900px; /* Max width for centered stack */
+    margin:0 auto; 
+  }
+  .chart-container { 
+    background:var(--card-bg); 
+    border: 1px solid var(--chart-border);
+    border-radius:12px; 
+    padding:1rem; 
+    box-shadow:0 8px 16px var(--shadow-light); 
+    width:80%; 
+    height:400px; /* Fixed height for better visual consistency */
+    transition: background 0.3s, border-color 0.3s;
+  }
+  
+  /* Responsive Adjustments */
+  @media(max-width:768px){
+    body { padding: 1rem; }
+    h1 { font-size: 2rem; }
+    #summary { gap: 1rem; }
+    .card { min-width: unset; max-width: 48%; padding: 0.8rem; }
+    .card h2 { font-size: 2rem; }
+    .chart-container { height: 400px; padding: 0.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Enhanced Analytics Dashboard ✨</h1>
+
+<div id="top-bar">
+    <nav>
+      <a href="bookings.html">Back to Bookings</a>
+    </nav>
+    <button id="theme-toggle">Switch to Dark Mode</button>
+</div>
+
+<div id="summary">
+  <div class="card">
+    <h2 id="totalBookings">0</h2>
+    <p>Total Bookings</p>
+  </div>
+  <div class="card">
+    <h2 id="totalEvents">0</h2>
+    <p>Total Events</p>
+  </div>
+  <div class="card">
+    <h2 id="totalGroups">0</h2>
+    <p>Total Groups</p>
+  </div>
+</div>
+
+<div id="charts">
+  <div class="chart-container">
+    <canvas id="eventChart"></canvas>
+  </div>
+  <div class="chart-container">
+    <canvas id="groupBarChart"></canvas>
+  </div>
+  <div class="chart-container">
+    <canvas id="eventPieChart"></canvas>
+  </div>
+</div>
+
+<script>
+let eventChart, groupBarChart, eventPieChart; // Store chart instances globally
+
+// Utility function for case-insensitive normalization
+function normalize(s){ return (s||'').toString().trim().toLowerCase(); }
+
+const allBookings = JSON.parse(localStorage.getItem('bookingsList')) || [];
+
+// --- Theme Management ---
+const body = document.body;
+const themeToggle = document.getElementById('theme-toggle');
+
+function setTheme(mode) {
+    if (mode === 'dark') {
+        body.classList.add('dark-mode');
+        themeToggle.textContent = 'Switch to Light Mode';
+        localStorage.setItem('theme', 'dark');
+    } else {
+        body.classList.remove('dark-mode');
+        themeToggle.textContent = 'Switch to Dark Mode';
+        localStorage.setItem('theme', 'light');
+    }
+    // Re-render charts after theme change to ensure colors update
+    if (eventChart) {
+        destroyCharts();
+        renderCharts();
+    }
+}
+
+function toggleTheme() {
+    const currentMode = body.classList.contains('dark-mode') ? 'dark' : 'light';
+    setTheme(currentMode === 'light' ? 'dark' : 'light');
+}
+
+// Initial theme load
+const savedTheme = localStorage.getItem('theme') || 'light';
+setTheme(savedTheme);
+themeToggle.addEventListener('click', toggleTheme);
+
+// --- Data Aggregation ---
+const eventCount = {};
+const groupNames = new Set();
+
+allBookings.forEach(b => {
+  // 1. Count Bookings per Event
+  const eventName = b.event || 'Unknown Event';
+  eventCount[eventName] = (eventCount[eventName] || 0) + 1;
+
+  // 2. Track Unique Groups (normalize the name for uniqueness tracking)
+  const groupKey = b.groupName || b.rawGroupName;
+  if (groupKey) {
+    groupNames.add(normalize(groupKey));
+  }
+});
+
+// Calculate Bookings per Group (focus on actual groups, excluding null/empty)
+const groupCount = {};
+allBookings.filter(b => b.groupName || b.rawGroupName).forEach(b => {
+    const groupName = b.groupName || b.rawGroupName || 'Unknown Group';
+    groupCount[groupName] = (groupCount[groupName] || 0) + 1;
+});
+
+// Sort Group Count for better visualization (Top 10 groups)
+const sortedGroupCounts = Object.entries(groupCount)
+  .sort(([, a], [, b]) => b - a)
+  .slice(0, 10); // Show only top 10 groups
+const topGroupLabels = sortedGroupCounts.map(([name]) => name);
+const topGroupData = sortedGroupCounts.map(([, count]) => count);
+
+// --- Update Summary Cards ---
+document.getElementById('totalBookings').textContent = allBookings.length;
+document.getElementById('totalEvents').textContent = Object.keys(eventCount).length;
+document.getElementById('totalGroups').textContent = groupNames.size;
+
+
+// --- Chart Configuration & Rendering Logic ---
+
+function getChartColors() {
+    // Check if dark mode is active to determine datalabels color
+    const isDarkMode = body.classList.contains('dark-mode');
+    const labelColor = isDarkMode ? '#f8fafc' : '#111827';
+    
+    // Consistent color palette
+    const palette = ['#4e54c8','#8f94fb','#ff6b6b','#ffa64d','#4dd2ff','#4dff88','#ff4dd2','#ffb14d', '#c84e54', '#fb948f'];
+    
+    return { palette, labelColor };
+}
+
+// Bar/Line Chart Global Options
+function getBarChartOptions(title, labelColor) {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: true, position: 'top', labels: { font: { size: 14, weight: 'bold' }, color: labelColor } },
+        tooltip: { enabled: true, titleFont: { size: 16 }, bodyFont: { size: 14 } },
+        datalabels: {
+          color: labelColor,
+          font: { size: 14, weight: 'bold' },
+          anchor: 'end',
+          align: 'end'
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          title: { display: true, text: 'Number of Bookings', font: { size: 16, weight: 'bold' }, color: labelColor },
+          ticks: { font: { size: 12, color: labelColor } },
+          grid: { color: 'rgba(150, 150, 150, 0.2)' }
+        },
+        x: {
+          title: { display: true, text: title, font: { size: 16, weight: 'bold' }, color: labelColor },
+          ticks: { font: { size: 12, color: labelColor }, maxRotation: 45, minRotation: 45 },
+          grid: { color: 'rgba(150, 150, 150, 0.2)' }
+        }
+      }
+    };
+}
+
+// Pie Chart Global Options
+function getPieChartOptions(labelColor) {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 14, weight: 'bold' }, color: labelColor } },
+        tooltip: { enabled: true, titleFont: { size: 16 }, bodyFont: { size: 14 } },
+        datalabels: {
+          color: '#fff', // White color always works well on colorful slices
+          font: { size: 14, weight: 'bold' },
+          formatter: (value, context) => {
+            const total = context.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);
+            const percent = ((value/total)*100).toFixed(1);
+            return `${value} (${percent}%)`;
+          }
+        }
+      }
+    };
+}
+
+function destroyCharts() {
+    if (eventChart) eventChart.destroy();
+    if (groupBarChart) groupBarChart.destroy();
+    if (eventPieChart) eventPieChart.destroy();
+}
+
+function renderCharts() {
+    const { palette, labelColor } = getChartColors();
+    
+    // 1. Event Bookings Bar Chart
+    eventChart = new Chart(document.getElementById('eventChart'), {
+      type: 'bar',
+      data: {
+        labels: Object.keys(eventCount),
+        datasets: [{
+          label: 'Bookings per Event',
+          data: Object.values(eventCount),
+          backgroundColor: palette
+        }]
+      },
+      options: getBarChartOptions('Event Name', labelColor),
+      plugins: [ChartDataLabels]
+    });
+
+    // 2. Top Groups Bar Chart
+    groupBarChart = new Chart(document.getElementById('groupBarChart'), {
+      type: 'bar',
+      data: {
+        labels: topGroupLabels,
+        datasets: [{
+          label: `Bookings per Group (Top ${topGroupLabels.length})`,
+          data: topGroupData,
+          backgroundColor: palette.slice(0, topGroupLabels.length)
+        }]
+      },
+      options: getBarChartOptions('Group Name', labelColor),
+      plugins: [ChartDataLabels]
+    });
+
+    // 3. Event Distribution Pie Chart
+    eventPieChart = new Chart(document.getElementById('eventPieChart'), {
+      type: 'pie',
+      data: {
+        labels: Object.keys(eventCount),
+        datasets: [{
+          label: 'Event Distribution (%)',
+          data: Object.values(eventCount),
+          backgroundColor: palette
+        }]
+      },
+      options: getPieChartOptions(labelColor),
+      plugins: [ChartDataLabels]
+    });
+}
+
+// --- Initial Render ---
+renderCharts();
+</script>
+
+</body>
+</html>

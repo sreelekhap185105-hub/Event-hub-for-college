@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Event Registration (Fixed Leader Booking)</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#f6f7fb;--card:#fff;--muted:#6b7280;--accent:#4e54c8;--accent2:#8f94fb;--danger:#ef4444}
+  *{box-sizing:border-box}
+  body{font-family:Inter,system-ui,Arial;background:var(--bg);margin:0;padding:28px;display:flex;justify-content:center}
+  .container{width:100%;max-width:920px}
+  .card{background:var(--card);border-radius:14px;padding:22px;box-shadow:0 12px 36px rgba(2,6,23,0.06)}
+  .title{font-size:20px;margin:0 0 6px;background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .subtitle{color:var(--muted);margin:0 0 16px;font-size:13px}
+  .seg{display:flex;gap:8px;margin-bottom:16px}
+  .seg button{padding:8px 12px;border-radius:999px;border:1px solid #eef2ff;background:#fff;cursor:pointer;font-weight:700}
+  .seg button.active{background:linear-gradient(90deg,var(--accent),var(--accent2));color:white}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  label{display:block;font-weight:700;font-size:13px;margin-bottom:6px}
+  input,select{width:100%;padding:10px;border-radius:10px;border:1px solid #e6e9f2;font-size:14px;background:#fff}
+  .muted{color:var(--muted);font-size:13px}
+  .members{margin-top:12px;display:flex;flex-direction:column;gap:10px}
+  .member-card{background:#fbfdff;border:1px solid #eef2ff;padding:12px;border-radius:10px}
+  .member-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .badge{font-weight:700;background:rgba(78,84,200,0.08);padding:6px 10px;border-radius:999px}
+  .controls{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
+  .btn{padding:10px 14px;border-radius:12px;border:none;cursor:pointer;font-weight:700}
+  .btn.primary{background:var(--accent);color:#fff}
+  .btn.ghost{background:#fff;border:1px solid #e6e9f2;color:#0f172a}
+  .error{color:var(--danger);font-weight:700;margin-top:8px;display:none}
+  pre.debug{background:#0b1220;color:#e6eef8;padding:12px;border-radius:8px;margin-top:12px;display:none;white-space:pre-wrap}
+  @media (max-width:720px){ .grid{grid-template-columns:1fr} .controls{flex-direction:column;align-items:stretch} }
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="card" role="main" aria-labelledby="title">
+      <h1 id="title" class="title">Event Registration</h1>
+      <p class="subtitle">Single or group registration. Member 1 is leader — their booking will be the confirmation target.</p>
+
+      <!-- Add sample event if none (for local testing) -->
+      <script>
+        if (!localStorage.getItem('selectedEvent')) {
+          localStorage.setItem('selectedEvent', JSON.stringify({
+            id: 'event_demo_1',
+            name: 'Demo Seminar',
+            date: '2025-11-21',
+            time: '16:25',
+            venue: 'Auditorium'
+          }));
+        }
+      </script>
+
+      <div class="grid" style="align-items:center;margin-bottom:12px">
+        <div>
+          <label>Event</label>
+          <input id="eventName" disabled>
+        </div>
+        <div>
+          <label>Date & Time</label>
+          <input id="eventTime" disabled>
+        </div>
+      </div>
+
+      <div class="seg" role="tablist" aria-label="registration type">
+        <button id="btnSingle" class="active" aria-pressed="true">Single</button>
+        <button id="btnGroup" aria-pressed="false">Group</button>
+      </div>
+
+      <form id="form" onsubmit="return false" novalidate>
+        <div id="singleSection">
+          <div class="grid">
+            <div><label for="singleName">Your name</label><input id="singleName" type="text" placeholder="Full name"></div>
+            <div><label for="singleEmail">Email</label><input id="singleEmail" type="email" placeholder="you@example.com"></div>
+            <div><label for="singlePhone">Phone</label><input id="singlePhone" type="tel" placeholder="9876543210"></div>
+            <div><label for="singleClass">Class / Dept (optional)</label><input id="singleClass" type="text" placeholder="CSE - 3rd year"></div>
+          </div>
+        </div>
+
+        <div id="groupSection" style="display:none">
+          <div class="grid">
+            <div><label for="groupRaw">Group name (optional)</label><input id="groupRaw" type="text" placeholder="Team Alpha"></div>
+            <div><label for="groupSize">Group size limit</label><select id="groupSize"><option>2</option><option selected>3</option><option>4</option><option>5</option></select></div>
+          </div>
+
+          <p class="muted" style="margin-top:8px">Start with Member 1 (leader). Click <strong>Add member</strong> to append more.</p>
+
+          <div class="members" id="membersContainer" aria-live="polite"></div>
+
+          <div style="margin-top:8px">
+            <button id="addMemberBtn" class="btn ghost" type="button">+ Add member</button>
+            <span id="membersCount" class="muted" style="margin-left:12px">Members: 0</span>
+          </div>
+        </div>
+
+        <div id="formError" class="error"></div>
+
+        <div class="controls">
+          <button id="previewBtn" class="btn ghost" type="button">Preview</button>
+          <button id="submitBtn" class="btn primary" type="button">Register</button>
+        </div>
+
+        <pre id="debugOut" class="debug"></pre>
+      </form>
+    </div>
+  </div>
+
+<script>
+  // --- init
+  const selectedEvent = JSON.parse(localStorage.getItem('selectedEvent') || 'null');
+  if (!selectedEvent) { alert('No selectedEvent'); throw new Error('selectedEvent missing'); }
+  document.getElementById('eventName').value = selectedEvent.name || '';
+  document.getElementById('eventTime').value = (selectedEvent.date || '') + (selectedEvent.time ? ' • ' + selectedEvent.time : '');
+
+  // toggle single/group
+  const btnSingle = document.getElementById('btnSingle'), btnGroup = document.getElementById('btnGroup');
+  const singleSection = document.getElementById('singleSection'), groupSection = document.getElementById('groupSection');
+  btnSingle.addEventListener('click', ()=> setMode('single'));
+  btnGroup.addEventListener('click', ()=> setMode('group'));
+  function setMode(m){
+    if (m === 'single'){
+      btnSingle.classList.add('active'); btnSingle.setAttribute('aria-pressed','true');
+      btnGroup.classList.remove('active'); btnGroup.setAttribute('aria-pressed','false');
+      singleSection.style.display=''; groupSection.style.display='none'; hideError();
+    } else {
+      btnGroup.classList.add('active'); btnGroup.setAttribute('aria-pressed','true');
+      btnSingle.classList.remove('active'); btnSingle.setAttribute('aria-pressed','false');
+      singleSection.style.display='none'; groupSection.style.display=''; if (members.length===0) addMember(); hideError();
+    }
+  }
+
+  // members state and UI
+  let members = [];
+  const membersContainer = document.getElementById('membersContainer');
+  const membersCount = document.getElementById('membersCount');
+  const groupSize = document.getElementById('groupSize');
+
+  function genId(pref='id'){ return pref + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+  function escapeHtml(s){ return (s===null||typeof s==='undefined') ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function addMember(pref={}) {
+    const limit = parseInt(groupSize.value,10);
+    if (members.length >= limit) { showError(`Group size limit is ${limit}`); return; }
+    const id = genId('m');
+    members.push({ id, name: pref.name||'', email: pref.email||'', phone: pref.phone||'', role: pref.role||'' });
+    renderMembers();
+  }
+
+  function removeMember(id) {
+    if (members.length <= 1) { showError('A group must have at least one member (leader).'); return; }
+    members = members.filter(m => m.id !== id);
+    renderMembers();
+  }
+
+  function renderMembers(){
+    membersContainer.innerHTML = '';
+    membersCount.textContent = `Members: ${members.length}`;
+    members.forEach((m, idx) => {
+      const card = document.createElement('div');
+      card.className = 'member-card';
+      card.innerHTML = `
+        <div class="member-header">
+          <div>${idx===0 ? '<span class="badge">Leader</span>' : '<strong>Member '+(idx+1)+'</strong>'}</div>
+          <div>${idx===0 ? '' : '<button class="remove-btn" data-id="${m.id}">Remove</button>'}</div>
+        </div>
+        <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px">
+          <div><label>Name</label><input data-id="${m.id}" data-field="name" class="m-input" placeholder="Full name" value="${escapeHtml(m.name)}"></div>
+          <div><label>Email</label><input data-id="${m.id}" data-field="email" class="m-input" placeholder="email@example.com" value="${escapeHtml(m.email)}"></div>
+          <div><label>Phone</label><input data-id="${m.id}" data-field="phone" class="m-input" placeholder="9876543210" value="${escapeHtml(m.phone)}"></div>
+          <div><label>Role (optional)</label><input data-id="${m.id}" data-field="role" class="m-input" placeholder="Designer / Dev" value="${escapeHtml(m.role)}"></div>
+        </div>
+      `;
+      membersContainer.appendChild(card);
+
+      // wire inputs
+      card.querySelectorAll('.m-input').forEach(inp=>{
+        inp.addEventListener('input', e=>{
+          const id = e.target.getAttribute('data-id'), f = e.target.getAttribute('data-field');
+          const obj = members.find(x => x.id === id); if (obj) obj[f] = e.target.value;
+        });
+      });
+
+      const rem = card.querySelector('.remove-btn');
+      if (rem) rem.addEventListener('click', ()=> removeMember(rem.getAttribute('data-id')));
+    });
+  }
+
+  // validation & build registration
+  const formError = document.getElementById('formError');
+  function showError(msg){ formError.style.display='block'; formError.textContent = msg; window.scrollTo({top:0,behavior:'smooth'}); }
+  function hideError(){ formError.style.display='none'; formError.textContent = ''; }
+
+  function buildRegistration(){
+    if (groupSection.style.display === 'none') {
+      const name = document.getElementById('singleName').value.trim();
+      const email = document.getElementById('singleEmail').value.trim();
+      const phone = document.getElementById('singlePhone').value.trim();
+      if (!name || !email) { showError('Please enter name and email'); return null; }
+      return { id: genId('reg'), event: selectedEvent.name, eventId: selectedEvent.id||null, groupName:null, rawGroupName:null, members:[{name,email,phone}], createdAt:new Date().toISOString() };
+    } else {
+      const raw = (document.getElementById('groupRaw').value || '').trim();
+      if (members.length === 0) { showError('Add at least one member'); return null; }
+      const limit = parseInt(groupSize.value,10);
+      if (members.length > limit) { showError(`Max group size is ${limit}`); return null; }
+      for (let i=0;i<members.length;i++) if (!members[i].name || members[i].name.trim().length < 2) { showError(`Member ${i+1} must have a valid name`); return null; }
+      const cleaned = members.map(m=>({ name:(m.name||'').trim(), email:(m.email||'').trim()||null, phone:(m.phone||'').trim()||null, role:(m.role||'').trim()||null }));
+      hideError();
+      return { id: genId('reg'), event: selectedEvent.name, eventId: selectedEvent.id||null, groupName: raw?raw.toLowerCase().replace(/\s+/g,' ').trim():null, rawGroupName: raw||null, members: cleaned, createdAt:new Date().toISOString() };
+    }
+  }
+
+  // ---- Robust booking creation: ALWAYS create leader booking, reuse for others when possible ----
+  function createBookingsAndRedirect(reg){
+    const bookings = JSON.parse(localStorage.getItem('bookingsList') || '[]');
+
+    // bookingObjects holds object references for each member (existing or created)
+    const bookingObjects = [];
+
+    for (let i = 0; i < reg.members.length; i++){
+      const m = reg.members[i];
+
+      // For the leader (i === 0) always create a new booking (do NOT reuse)
+      let existing = null;
+      if (i !== 0) {
+        existing = bookings.find(b=>{
+          const sameEvent = (b.eventId && reg.eventId && b.eventId === reg.eventId) || (b.event === reg.event);
+          const sameEmail = m.email && b.email && (m.email||'').toLowerCase() === (b.email||'').toLowerCase();
+          const sameName  = m.name && b.student && (m.name||'').toLowerCase() === (b.student||'').toLowerCase();
+          return sameEvent && (sameEmail || sameName);
+        });
+      }
+
+      if (existing) {
+        bookingObjects.push(existing);
+        continue;
+      }
+
+      // create a fresh booking object
+      const bookingId = 'bk_' + Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+      const qr = 'qr_' + Math.random().toString(36).slice(2,10);
+      const nb = {
+        bookingId,
+        qrCode: qr,
+        student: m.name||'Unknown',
+        email: m.email||null,
+        phone: m.phone||null,
+        event: reg.event,
+        eventId: reg.eventId||null,
+        date: selectedEvent.date||'',
+        time: selectedEvent.time||'',
+        venue: selectedEvent.venue||'',
+        createdAt: new Date().toISOString(),
+        groupName: reg.groupName||reg.rawGroupName||null,
+        rawGroupName: reg.rawGroupName||null,
+        groupMembers: reg.members
+      };
+      bookings.push(nb);
+      bookingObjects.push(nb);
+    }
+
+    // persist bookings
+    localStorage.setItem('bookingsList', JSON.stringify(bookings));
+
+    // find leader booking object among bookingObjects (match by name/email + event, fallback to first)
+    const leader = reg.members[0];
+    let leaderBooking = null;
+    if (leader) {
+      leaderBooking = bookingObjects.find(b => {
+        if (!b) return false;
+        const sameEvent = (b.eventId && reg.eventId && b.eventId === reg.eventId) || (b.event === reg.event);
+        const sameEmail = leader.email && b.email && (leader.email||'').toLowerCase() === (b.email||'').toLowerCase();
+        const sameName  = leader.name  && b.student && (leader.name||'').toLowerCase() === (b.student||'').toLowerCase();
+        return sameEvent && (sameEmail || sameName);
+      }) || bookingObjects[0] || null;
+    } else {
+      leaderBooking = bookingObjects[0] || null;
+    }
+
+    // redirect to leader booking id
+    if (leaderBooking && (leaderBooking.bookingId || leaderBooking.qrCode)) {
+      const idToUse = leaderBooking.bookingId || leaderBooking.qrCode;
+      window.location.href = 'booking-confirmation.html?booking_id=' + encodeURIComponent(idToUse);
+    } else {
+      window.location.href = 'bookings.html';
+    }
+  }
+
+  // events wiring
+  document.getElementById('addMemberBtn').addEventListener('click', ()=> addMember());
+  document.getElementById('previewBtn').addEventListener('click', ()=>{
+    const reg = buildRegistration(); if (!reg) return;
+    const dbg = document.getElementById('debugOut'); dbg.style.display='block'; dbg.textContent = JSON.stringify(reg,null,2) + '\n\nregistrationsList:\n' + localStorage.getItem('registrationsList') + '\n\nbookingsList:\n' + localStorage.getItem('bookingsList');
+  });
+
+  document.getElementById('submitBtn').addEventListener('click', ()=>{
+    const reg = buildRegistration(); if (!reg) return;
+    // save registration
+    const regs = JSON.parse(localStorage.getItem('registrationsList') || '[]');
+    regs.push(reg);
+    localStorage.setItem('registrationsList', JSON.stringify(regs));
+    // create bookings & redirect
+    createBookingsAndRedirect(reg);
+  });
+
+  // init defaults
+  setMode('single');
+  members = [];
+</script>
+</body>
+</html>

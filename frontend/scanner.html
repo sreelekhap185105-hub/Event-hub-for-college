@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QR Scanner - Teacher</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<style>
+  body { 
+    font-family:'Inter', sans-serif; 
+    background:#f6f0ff; 
+    display:flex; 
+    flex-direction:column; 
+    align-items:center; 
+    padding:2rem; 
+    margin:0; 
+  }
+
+  h1 { 
+    font-size:3rem; 
+    margin-bottom:2rem; 
+    background:linear-gradient(90deg,#4e54c8,#8f94fb);
+    -webkit-background-clip:text; 
+    -webkit-text-fill-color:transparent; 
+    text-align:center; 
+  }
+
+  nav { display:flex; gap:1rem; margin-bottom:2rem; justify-content:center; }
+  nav a { text-decoration:none; color:#4e54c8; font-weight:600; padding:0.5rem 1rem; border-radius:10px; transition:0.3s; background:#fff; box-shadow:0 5px 15px rgba(0,0,0,0.1); }
+  nav a:hover { background:#4e54c8; color:#fff; }
+
+  #scannerCard { background:#000; border-radius:25px; width:450px; height:450px; overflow:hidden; display:flex; justify-content:center; align-items:center; }
+  #reader { width:100%; height:100%; background:none !important; }
+  #reader video { object-fit: cover !important; width: 100% !important; height: 100% !important; border-radius:25px; }
+
+  .details {
+    background:#fff;
+    border: 2px solid #000;
+    padding:2.5rem;
+    border-radius:25px;
+    width:450px;
+    text-align:left;
+    position:fixed;
+    top:50%;
+    left:50%;
+    transform:translate(-50%, -50%);
+    display:none;
+    box-shadow:0 15px 40px rgba(0,0,0,0.3);
+    line-height:1.8;
+    font-size:1.2rem;
+  }
+  
+
+
+
+  .details p { 
+    margin:1rem 0; 
+    display:flex; 
+    align-items:center; 
+    gap:0.5rem; 
+  }
+
+  .verified, .not-verified {
+    font-weight:700; 
+    font-size:1.4rem; 
+    margin-top:1.5rem; 
+    display:flex;
+    align-items:center;
+    gap:0.5rem;
+  }
+
+  .verified::before { content: "✔"; color:green; font-size:1.5rem; }
+  .verified { color:green; }
+  .not-verified::before { content: "✖"; color:red; font-size:1.5rem; }
+  .not-verified { color:red; }
+
+  button { 
+    padding:0.8rem 1.5rem; 
+    border:none; 
+    border-radius:50px; 
+    background:#4e54c8; 
+    color:#fff; 
+    font-weight:600; 
+    cursor:pointer; 
+    transition:0.3s; 
+    margin-top:1.5rem; 
+    font-size:1.1rem;
+  }
+  button:hover { background:#8f94fb; }
+
+  .blur-background nav, .blur-background #scannerCard { filter: blur(5px); pointer-events:none; }
+</style>
+</head>
+<body>
+
+<h1>QR Code Scanner</h1>
+<nav id="navbar"></nav>
+
+<div id="scannerCard">
+  <div id="reader"></div>
+</div>
+
+<div class="details" id="studentDetails">
+  <p><strong>Name:</strong> <span id="detName"></span></p>
+  <p><strong>Email:</strong> <span id="detEmail"></span></p>
+  <p><strong>Event:</strong> <span id="detEvent"></span></p>
+  <p><strong>Booking ID:</strong> <span id="detID"></span></p>
+  <p><strong>Phone:</strong> <span id="detPhone"></span></p>
+  <p><strong>Class:</strong> <span id="detClass"></span></p>
+  <p id="statusMsg"></p>
+  <button onclick="resumeScanner()">Scan Next Student</button>
+</div>
+
+<script>
+const role = localStorage.getItem('role');
+const allBookings = JSON.parse(localStorage.getItem('bookingsList')) || [];
+const navbar = document.getElementById('navbar');
+
+navbar.innerHTML = role === 'teacher'
+  ? `<a href="event.html">Events</a><a href="bookings.html">All Bookings</a><a href="add-event.html">Add Event</a><a href="scanner.html">QR Scanner</a><a href="profile.html">Profile</a>`
+  : `<a href="events.html">Events</a><a href="bookings.html">My Bookings</a><a href="profile.html">Profile</a>`;
+
+let html5QrcodeScanner;
+let lastScanAt = 0;
+const SCAN_COOLDOWN = 1000;
+
+/* Flexible lookup (kept same logic style but improved) */
+function normalize(v){ return (v || "").toString().trim().toLowerCase(); }
+
+function findBookingFromScanned(scannedText){
+  let parsed = null;
+  try { parsed = JSON.parse(scannedText); } catch(e){}
+
+  if (parsed && typeof parsed === "object") {
+    const id = parsed.bookingId || parsed.booking_id || parsed.qrCode || parsed.qr;
+    if (id) {
+      const low = normalize(id);
+      return allBookings.find(b => normalize(b.bookingId) === low || normalize(b.qrCode) === low) || null;
+    }
+  }
+
+  const low = normalize(scannedText);
+
+  return (
+    allBookings.find(b => normalize(b.qrCode) === low) ||
+    allBookings.find(b => normalize(b.bookingId) === low) ||
+    null
+  );
+}
+
+/* FIXED startScanner */
+function startScanner(cameraId){
+  document.getElementById('studentDetails').style.display = 'none';
+  document.body.classList.remove('blur-background');
+
+  if (html5QrcodeScanner) {
+    try { html5QrcodeScanner.clear(); } catch(e){}
+  }
+
+  html5QrcodeScanner = new Html5Qrcode("reader");
+
+  const config = {
+    fps: 18,
+    qrbox: { width: 350, height: 350 },
+    rememberLastUsedCamera: true
+  };
+
+  // ✔ FIX: camera config must contain exactly 1 key
+  const cameraConfig = cameraId
+    ? { deviceId: { exact: cameraId } }
+    : { facingMode: "environment" };
+
+  html5QrcodeScanner
+    .start(
+      cameraConfig,
+      config,
+      (decodedText) => {
+        const now = Date.now();
+        if (now - lastScanAt < SCAN_COOLDOWN) return;
+        lastScanAt = now;
+
+        const booking = findBookingFromScanned(decodedText);
+        const detailsDiv = document.getElementById('studentDetails');
+
+        if(booking){
+          detName.innerText = booking.student;
+          detEmail.innerText = booking.email;
+          detEvent.innerText = booking.event;
+          detID.innerText = booking.qrCode;
+          detPhone.innerText = booking.phone || "-";
+          detClass.innerText = booking.studentClass || "-";
+
+          statusMsg.innerText = "Verified / Allowed to Enter";
+          statusMsg.className = "verified";
+        } else {
+          detName.innerText = "-";
+          detEmail.innerText = "-";
+          detEvent.innerText = "-";
+          detID.innerText = "-";
+          detPhone.innerText = "-";
+          detClass.innerText = "-";
+
+          statusMsg.innerText = "Not Verified / Entry Denied";
+          statusMsg.className = "not-verified";
+        }
+
+        detailsDiv.style.display = 'block';
+        document.body.classList.add('blur-background');
+      },
+      () => {}
+    )
+    .catch(err => {
+      alert("Unable to start scanner: " + err.message);
+      console.error(err);
+    });
+}
+
+function resumeScanner(){
+  document.getElementById('studentDetails').style.display = 'none';
+  document.body.classList.remove('blur-background');
+
+  if (html5QrcodeScanner && html5QrcodeScanner.resume) {
+    html5QrcodeScanner.resume();
+  } else {
+    startScanner();
+  }
+}
+
+startScanner();
+</script>
+
+<script>
+
+const API_BASE = (window.API_BASE || 'http://localhost:5000');
+const input = document.getElementById('qrText') || (function(){ const t=document.createElement('textarea'); t.id='qrText'; document.body.appendChild(t); return t; })();
+const btn = document.getElementById('validateBtn') || (function(){ const b=document.createElement('button'); b.id='validateBtn'; b.innerText='Validate'; document.body.appendChild(b); return b; })();
+const out = document.getElementById('scanResult') || (function(){ const p=document.createElement('pre'); p.id='scanResult'; document.body.appendChild(p); return p; })();
+
+btn.addEventListener('click', async () => {
+  let payload = null;
+  try { payload = JSON.parse(input.value); } catch(e) {}
+  const booking_id = payload?.booking_id || input.value.trim();
+  const res = await fetch(API_BASE + '/api/validate_qr', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ booking_id })
+  });
+  const data = await res.json();
+  out.textContent = JSON.stringify(data, null, 2);
+});
+
+</script>
+</body>
+</html>

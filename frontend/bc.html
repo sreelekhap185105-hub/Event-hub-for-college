@@ -1,0 +1,116 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Booking Confirmation</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  body { 
+    font-family:'Inter', sans-serif; 
+    background:#f6f0ff; 
+    display:flex; 
+    justify-content:center; 
+    align-items:center; 
+    min-height:100vh; 
+    padding:2rem; 
+  }
+  .card { 
+    background:#fff; 
+    max-width:500px; 
+    width:100%;
+    padding:2rem; 
+    border-radius:20px; 
+    box-shadow:0 10px 20px rgba(0,0,0,0.1); 
+    text-align:center;
+  }
+  h2 { 
+    font-size:2rem; 
+    margin-bottom:1rem; 
+    background:linear-gradient(90deg,#4e54c8,#8f94fb); 
+    -webkit-background-clip:text; 
+    -webkit-text-fill-color:transparent; 
+  }
+  .details { 
+    margin:15px 0; 
+    font-size:1rem; 
+    color:#333; 
+    text-align:left;
+  }
+  #qrcode { margin:20px 0; }
+  button#downloadBtn { 
+    padding:0.8rem 1.2rem; 
+    border:none; 
+    border-radius:50px; 
+    font-weight:600; 
+    cursor:pointer; 
+    background:#4e54c8; 
+    color:#fff; 
+    transition:0.3s;
+  }
+  button#downloadBtn:hover { background:#8f94fb; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
+</head>
+<body>
+
+<div class="card">
+  <h2>Booking Confirmed 🎉</h2>
+  <div class="details" id="studentDetails"></div>
+  <div id="qrcode"></div>
+  <button id="downloadBtn">Download QR Code</button>
+</div>
+
+<script>
+  // Get latest booking from bookingsList
+  const bookingsList = JSON.parse(localStorage.getItem('bookingsList')) || [];
+  if(bookingsList.length === 0){
+    document.getElementById('studentDetails').innerHTML = "<p>No booking found ❌</p>";
+    document.getElementById('downloadBtn').style.display = 'none';
+  } else {
+    const latestBooking = bookingsList[bookingsList.length - 1];
+
+    // Display booking details
+    document.getElementById('studentDetails').innerHTML = `
+      <p><b>Event:</b> ${latestBooking.event}</p>
+      <p><b>Name:</b> ${latestBooking.student}</p>
+      <p><b>Email:</b> ${latestBooking.email}</p>
+      <p><b>Phone:</b> ${latestBooking.phone}</p>
+      <p><b>Date:</b> ${latestBooking.date}</p>
+      <p><b>Time:</b> ${latestBooking.time}</p>
+      <p><b>Venue:</b> ${latestBooking.venue}</p>
+      <p><b>Booking ID:</b> ${latestBooking.qrCode}</p>
+    `;
+
+    // Generate simple QR code with unique ID only
+    const qrDiv = document.getElementById('qrcode');
+    const qr = new QRCode(qrDiv, {
+      text: latestBooking.qrCode, // ONLY uniqueID
+      width:180,
+      height:180
+    });
+
+    // Download QR code
+    document.getElementById('downloadBtn').addEventListener('click', function(){
+      const img = qrDiv.querySelector('img');
+      if(img){
+        const a = document.createElement('a');
+        a.href = img.src;
+        a.download = `${latestBooking.student}_QR.png`;
+        a.click();
+      }
+    });
+  }
+</script>
+
+<script>
+
+function getParam(name){ return new URLSearchParams(location.search).get(name); }
+const bookingId = getParam('booking_id');
+const img = document.getElementById('qr-img') || (function(){ const i=document.createElement('img'); document.body.appendChild(i); return i; })();
+img.src = 'http://localhost:5000/api/bookings/' + bookingId + '/qr';
+
+</script>
+</body>
+</html>

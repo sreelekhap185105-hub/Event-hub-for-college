@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Bookings — Teacher Filter & XLSX Export</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<!-- SheetJS (full build with style support) -->
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+<style>
+  body { font-family:Inter, Arial, sans-serif; background:#f6f0ff; padding:20px; }
+  .card { max-width:1100px; margin:0 auto; background:#fff; padding:18px; border-radius:12px; box-shadow:0 8px 24px rgba(2,6,23,0.06); }
+  h1 { margin:0 0 12px; font-size:1.6rem; color:#111827; text-align:center; background:linear-gradient(90deg,#4e54c8,#8f94fb); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .controls { display:flex; gap:10px; align-items:center; margin-bottom:12px; flex-wrap:wrap; justify-content:center; }
+  .controls input { padding:8px 10px; border-radius:8px; border:1px solid #e6e9f2; min-width:180px; }
+  .controls button { padding:8px 12px; border-radius:8px; border:none; background:#4e54c8; color:white; font-weight:700; cursor:pointer; }
+  .controls button:hover { background:#6f6efc; }
+  .table-wrap { overflow-x:auto; margin-top:12px; }
+  table { width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 8px 20px rgba(2,6,23,0.04); }
+  thead { background:#4e54c8; color:#fff; }
+  th, td { padding:10px 12px; text-align:left; border-bottom:1px solid #f3f4f6; font-size:0.95rem; vertical-align:middle; }
+  tr.group-header { background:#eef2ff; font-weight:700; }
+  td.canvas-cell { width:110px; text-align:center; }
+  button.remove-btn { padding:6px 10px; border-radius:8px; border:none; background:#ef4444; color:#fff; cursor:pointer; }
+  .muted { color:#6b7280; font-size:0.95rem; }
+  @media (max-width:780px) { .controls input { min-width:140px; } }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Bookings</h1>
+
+    <!-- Teacher-only filters: Name, Group name, Event name -->
+    <div class="controls" id="controls"></div>
+
+    <div class="table-wrap">
+      <table id="bookingTable" aria-describedby="bookingTableDesc">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Event</th>
+            <th>Booking ID</th>
+            <th>QR</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+/* -------------------------
+  Config & utils
+--------------------------*/
+const auth = JSON.parse(localStorage.getItem('auth')||'{}');
+const username = localStorage.getItem('username') || (auth.user && auth.user.name) || '';
+const userEmail = (auth.user && auth.user.email) || '';
+const role = localStorage.getItem('role') || 'student';
+
+function genId(pref='id'){ return pref + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function normalize(s){ return (s||'').toString().trim().toLowerCase(); }
+function escapeHtml(s){ return (s===null || typeof s === 'undefined') ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+let registrationsList = JSON.parse(localStorage.getItem('registrationsList') || '[]');
+let bookingsList = JSON.parse(localStorage.getItem('bookingsList') || '[]');
+
+/* -------------------------
+  Ensure bookings exist
+--------------------------*/
+function ensureBookingsFromRegistrations(){
+  registrationsList = JSON.parse(localStorage.getItem('registrationsList') || '[]');
+  bookingsList = JSON.parse(localStorage.getItem('bookingsList') || '[]');
+  let changed = false;
+  for (const reg of registrationsList) {
+    if (!reg || !reg.event) continue;
+    const members = Array.isArray(reg.members) ? reg.members : [];
+    for (const m of members) {
+      const sameEventMatch = (b) => ((b.eventId && reg.eventId && b.eventId === reg.eventId) || (b.event === reg.event));
+      const exists = bookingsList.find(b => {
+        if (!sameEventMatch(b)) return false;
+        if (m.email && b.email) return normalize(m.email) === normalize(b.email);
+        if (m.name && b.student) return normalize(m.name) === normalize(b.student);
+        return false;
+      });
+      if (exists) continue;
+      const bookingId = genId('bk');
+      const qr = genId('qr').slice(3);
+      const nb = {
+        bookingId,
+        qrCode: qr,
+        student: m.name || 'Unknown',
+        email: m.email || null,
+        phone: m.phone || null,
+        event: reg.event,
+        eventId: reg.eventId || null,
+        date: reg.date || (reg.eventDate || '') || '',
+        time: reg.time || '',
+        venue: reg.venue || '',
+        createdAt: new Date().toISOString(),
+        groupName: reg.groupName || null,
+        rawGroupName: reg.rawGroupName || null,
+        groupMembers: members
+      };
+      bookingsList.push(nb);
+      changed = true;
+    }
+  }
+  if (changed) localStorage.setItem('bookingsList', JSON.stringify(bookingsList));
+}
+
+/* -------------------------
+  UI wiring
+--------------------------*/
+const controlsDiv = document.getElementById('controls');
+const tableBody = document.querySelector('#bookingTable tbody');
+
+let nameFilterInput, groupFilterInput, eventFilterInput, applyBtn, downloadBtn;
+
+function buildControls() {
+  if (role !== 'teacher') {
+    controlsDiv.innerHTML = `<div class="muted">Logged in as <strong>${escapeHtml(username || userEmail || 'Student')}</strong></div>`;
+    return;
+  }
+  controlsDiv.innerHTML = `
+    <input id="nameFilter" placeholder="Filter by student name" />
+    <input id="groupFilter" placeholder="Filter by group name" />
+    <input id="eventFilter" placeholder="Filter by event name" />
+    <button id="applyFilters">Apply</button>
+    <button id="downloadXlsx">Download XLSX (filtered)</button>
+  `;
+  nameFilterInput = document.getElementById('nameFilter');
+  groupFilterInput = document.getElementById('groupFilter');
+  eventFilterInput = document.getElementById('eventFilter');
+  applyBtn = document.getElementById('applyFilters');
+  downloadBtn = document.getElementById('downloadXlsx');
+
+  [nameFilterInput, groupFilterInput, eventFilterInput].forEach(inp => {
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyFiltersAndRender(); });
+  });
+  applyBtn.addEventListener('click', applyFiltersAndRender);
+  downloadBtn.addEventListener('click', handleDownloadXLSX);
+}
+
+/* -------------------------
+  Filtering helpers
+--------------------------*/
+function getFilteredRows(filters = { name:'', group:'', event:'' }) {
+  bookingsList = JSON.parse(localStorage.getItem('bookingsList') || '[]');
+  filters.name = normalize(filters.name || '');
+  filters.group = normalize(filters.group || '');
+  filters.event = normalize(filters.event || '');
+  return bookingsList.filter(b => {
+    const bName = normalize(b.student || '');
+    const bGroup = normalize(b.groupName || b.rawGroupName || '');
+    const bEvent = normalize(b.event || '');
+    if (filters.name && !bName.includes(filters.name)) return false;
+    if (filters.group && !bGroup.includes(filters.group)) return false;
+    if (filters.event && !bEvent.includes(filters.event)) return false;
+    return true;
+  });
+}
+
+function applyFiltersAndRender(){
+  const filters = {
+    name: nameFilterInput ? normalize(nameFilterInput.value) : '',
+    group: groupFilterInput ? normalize(groupFilterInput.value) : '',
+    event: eventFilterInput ? normalize(eventFilterInput.value) : ''
+  };
+  renderTable(filters);
+}
+
+/* -------------------------
+  XLSX Export (SheetJS)
+--------------------------*/
+function handleDownloadXLSX(){
+  const filters = {
+    name: nameFilterInput ? normalize(nameFilterInput.value) : '',
+    group: groupFilterInput ? normalize(groupFilterInput.value) : '',
+    event: eventFilterInput ? normalize(eventFilterInput.value) : ''
+  };
+  const rows = getFilteredRows(filters);
+  if (!rows.length) return alert('No bookings match the selected filters.');
+
+  const selectedEvent = JSON.parse(localStorage.getItem('selectedEvent') || 'null');
+  const title = 'Bookings Export';
+  const eventName = (selectedEvent && selectedEvent.name) ? selectedEvent.name : 'All events';
+  const generatedAt = new Date().toLocaleString();
+  const filterSummary = `Filters: name=${filters.name||'(none)'}; group=${filters.group||'(none)'}; event=${filters.event||'(none)'}`;
+  const totalBookings = rows.length;
+  const totalGroups = new Set(rows.filter(r => r.groupName || r.rawGroupName).map(r => (r.groupName||r.rawGroupName).toLowerCase())).size;
+
+  // Build AOA (array of arrays) for worksheet
+  const wsData = [];
+  wsData.push([title]); // A1
+  wsData.push([`Event: ${eventName}`]);
+  wsData.push([`Generated: ${generatedAt}`]);
+  wsData.push([filterSummary]);
+  wsData.push([`Total bookings: ${totalBookings}`, `Total groups: ${totalGroups}`]);
+  wsData.push([]); // blank row
+  // Header row (no Date)
+  wsData.push(['Name','Email','Event','Booking ID','Group']);
+  // Data rows
+  for (const b of rows) {
+    wsData.push([ b.student||'', b.email||'', b.event||'', b.qrCode||b.bookingId||'', b.groupName||b.rawGroupName||'' ]);
+  }
+
+  // Create worksheet
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // Merge title across columns A:E (row 0)
+  ws['!merges'] = ws['!merges'] || [];
+  ws['!merges'].push({ s: { r:0, c:0 }, e: { r:0, c:4 } });
+
+  // Basic styling: bold title & header row (SheetJS best-effort)
+  try {
+    if (!ws['A1'].s) ws['A1'].s = {};
+    ws['A1'].s.font = { name: "Arial", sz: 14, bold: true };
+    const headerRowIdx = 6; // 0-based index: header is row 6 (7th row)
+    const cols = ['A','B','C','D','E'];
+    for (const col of cols) {
+      const cellRef = col + (headerRowIdx+1);
+      if (ws[cellRef]) {
+        ws[cellRef].s = ws[cellRef].s || {};
+        ws[cellRef].s.font = { bold: true };
+        ws[cellRef].s.fill = { fgColor: { rgb: "FFEEF6FF" } };
+      }
+    }
+  } catch(e){
+    // style failures are non-critical; continue
+    console.warn('sheet styling skipped', e);
+  }
+
+  // Column widths for nicer layout
+  ws['!cols'] = [{ wch:25 }, { wch:30 }, { wch:22 }, { wch:22 }, { wch:20 }];
+
+  // Workbook
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Bookings');
+
+  // Write workbook to binary array
+  const wbout = XLSX.write(wb, { bookType:'xlsx', type:'array', cellStyles:true });
+
+  const blob = new Blob([wbout], { type: 'application/octet-stream' });
+  const safeEvent = (eventName || 'all-events').replace(/[^a-z0-9-_]/gi, '_').slice(0,40);
+  const filename = `bookings_${safeEvent}_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.xlsx`;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/* -------------------------
+  Render table UI
+--------------------------*/
+function renderTable(filters = { name:'', group:'', event:'' }) {
+  tableBody.innerHTML = '';
+  bookingsList = JSON.parse(localStorage.getItem('bookingsList') || '[]');
+
+  if (role === 'teacher') {
+    const groupsMap = new Map();
+    const individuals = [];
+    const filtered = getFilteredRows(filters);
+
+    for (const b of filtered) {
+      const eventKey = b.eventId || b.event || 'event_unknown';
+      const groupKey = b.groupName || b.rawGroupName || null;
+      if (groupKey) {
+        const mapKey = eventKey + '||' + groupKey;
+        if (!groupsMap.has(mapKey)) groupsMap.set(mapKey, { event: b.event, eventId: eventKey, groupKey, rawName: b.rawGroupName || b.groupName || '', members: [] });
+        groupsMap.get(mapKey).members.push(b);
+      } else {
+        individuals.push(b);
+      }
+    }
+
+    const groupsArr = Array.from(groupsMap.values()).sort((a,b) => b.members.length - a.members.length);
+    for (const g of groupsArr) {
+      const headerTr = document.createElement('tr');
+      headerTr.className = 'group-header';
+      headerTr.innerHTML = `<td colspan="6">Group: <strong>${escapeHtml(g.rawName || g.groupKey)}</strong> — ${g.members.length} member(s) — Event: ${escapeHtml(g.event || '')}</td>`;
+      tableBody.appendChild(headerTr);
+
+      for (const m of g.members) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${escapeHtml(m.student)}</td>
+          <td>${escapeHtml(m.email || '')}</td>
+          <td>${escapeHtml(m.event || '')}</td>
+          <td>${escapeHtml(m.bookingId || m.qrCode || '')}</td>
+          <td class="canvas-cell"><canvas></canvas></td>
+          <td><button class="remove-btn" data-q="${escapeHtml(m.qrCode || m.bookingId || '')}">Remove</button></td>
+        `;
+        tableBody.appendChild(tr);
+        try { QRCode.toCanvas(tr.querySelector('canvas'), JSON.stringify({ bookingID: m.qrCode || m.bookingId, student: m.student, event: m.event }), { width:80 }); } catch(e){}
+      }
+    }
+
+    if (individuals.length) {
+      const headerTr = document.createElement('tr');
+      headerTr.className = 'group-header';
+      headerTr.innerHTML = `<td colspan="6">Individual registrations</td>`;
+      tableBody.appendChild(headerTr);
+      for (const m of individuals) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${escapeHtml(m.student)}</td>
+          <td>${escapeHtml(m.email || '')}</td>
+          <td>${escapeHtml(m.event || '')}</td>
+          <td>${escapeHtml(m.bookingId || m.qrCode || '')}</td>
+          <td class="canvas-cell"><canvas></canvas></td>
+          <td><button class="remove-btn" data-q="${escapeHtml(m.qrCode || m.bookingId || '')}">Remove</button></td>
+        `;
+        tableBody.appendChild(tr);
+        try { QRCode.toCanvas(tr.querySelector('canvas'), JSON.stringify({ bookingID: m.qrCode || m.bookingId, student: m.student, event: m.event }), { width:80 }); } catch(e){}
+      }
+    }
+
+    // remove handlers
+    tableBody.querySelectorAll('button.remove-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const q = btn.getAttribute('data-q');
+        if (!confirm('Remove this booking?')) return;
+        bookingsList = bookingsList.filter(x => (x.qrCode !== q && x.bookingId !== q));
+        localStorage.setItem('bookingsList', JSON.stringify(bookingsList));
+        renderTable({ name: normalize(nameFilterInput.value || ''), group: normalize(groupFilterInput.value || ''), event: normalize(eventFilterInput.value || '') });
+      });
+    });
+
+  } else {
+    const list = bookingsList.filter(b => {
+      const matchByEmail = userEmail && b.email && normalize(b.email) === normalize(userEmail);
+      const matchByName = username && b.student && normalize(b.student) === normalize(username);
+      return matchByEmail || matchByName;
+    });
+
+    if (!list.length) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td colspan="6" style="text-align:center;color:#6b7280;padding:20px">You have no bookings yet.</td>`;
+      tableBody.appendChild(tr);
+      return;
+    }
+
+    for (const m of list) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${escapeHtml(m.student)}</td>
+        <td>${escapeHtml(m.email || '')}</td>
+        <td>${escapeHtml(m.event || '')}</td>
+        <td>${escapeHtml(m.bookingId || m.qrCode || '')}</td>
+        <td class="canvas-cell"><canvas></canvas></td>
+        <td></td>
+      `;
+      tableBody.appendChild(tr);
+      try { QRCode.toCanvas(tr.querySelector('canvas'), JSON.stringify({ bookingID: m.qrCode || m.bookingId, student: m.student, event: m.event }), { width:80 }); } catch(e){}
+    }
+  }
+}
+
+/* -------------------------
+  Init
+--------------------------*/
+(function init(){
+  ensureBookingsFromRegistrations();
+  buildControls();
+  renderTable();
+  if (role === 'teacher') {
+    nameFilterInput.addEventListener('input', () => applyFiltersAndRender());
+    groupFilterInput.addEventListener('input', () => applyFiltersAndRender());
+    eventFilterInput.addEventListener('input', () => applyFiltersAndRender());
+    nameFilterInput.focus();
+  }
+})();
+</script>
+</body>
+</html>

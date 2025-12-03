@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contact - Event Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Inter', sans-serif; background:#f5f7fb; color:#1a1a1a; line-height:1.6; }
+  a { text-decoration:none; color:inherit; }
+
+  /* Navbar */
+  nav { display:flex; justify-content:space-between; align-items:center; padding:1rem 4rem; background:linear-gradient(90deg,#4e54c8,#8f94fb); color:#fff; position:sticky; top:0; z-index:100; }
+  nav .logo { font-size:1.8rem; font-weight:700; }
+  nav ul { list-style:none; display:flex; gap:2rem; }
+  nav ul li a { font-weight:500; transition:0.3s; }
+  nav ul li a:hover { color:#ffd1dc; }
+
+  /* Hero */
+  .hero { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:6rem 4rem; background:linear-gradient(135deg,#f6f0ff,#e0e7ff); min-height:30vh; text-align:center; }
+  .hero h1 { font-size:3rem; font-weight:700; margin-bottom:1rem; background:linear-gradient(90deg,#4e54c8,#8f94fb); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .hero p { font-size:1.2rem; color:#4b4b4b; }
+
+  /* Contact Form */
+  .contact-section { padding:4rem; display:flex; justify-content:center; }
+  .contact-card { background:#fff; padding:3rem; border-radius:20px; box-shadow:0 10px 20px rgba(0,0,0,0.05); width:100%; max-width:500px; }
+  .contact-card h2 { font-size:2rem; font-weight:700; margin-bottom:1.5rem; text-align:center; background:linear-gradient(90deg,#4e54c8,#8f94fb); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .contact-card form { display:flex; flex-direction:column; gap:1rem; }
+  .contact-card input, .contact-card textarea { padding:0.8rem 1rem; border-radius:10px; border:1px solid #ccc; font-size:1rem; resize:none; }
+  .contact-card textarea { height:120px; }
+  .contact-card button { padding:0.8rem 1rem; border:none; border-radius:50px; font-weight:600; cursor:pointer; transition:0.3s; background:#4e54c8; color:#fff; }
+  .contact-card button:hover { background:#8f94fb; }
+
+  /* Footer */
+  footer { background:#1e1e2f; color:#fff; padding:3rem 4rem; display:flex; justify-content:space-between; flex-wrap:wrap; }
+  footer .footer-section { flex:1; min-width:200px; margin-bottom:1.5rem; }
+  footer h4 { font-size:1.2rem; margin-bottom:1rem; font-weight:600; }
+  footer p,a { font-size:0.95rem; color:#ccc; margin-bottom:0.5rem; }
+  footer a:hover { color:#ffd1dc; }
+
+  /* Responsive */
+  @media(max-width:768px){ nav{flex-direction:column;gap:1rem;} .hero{padding:4rem 2rem;} .contact-section{padding:2rem;} footer{flex-direction:column;padding:2rem;} }
+</style>
+</head>
+<body>
+
+<!-- Navbar -->
+<nav>
+  <div class="logo">EventManager</div>
+  <ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="events.html">Events</a></li>
+    <li><a href="student-login.html">Student Login</a></li>
+    <li><a href="teacher-login.html">Teacher Login</a></li>
+    <li><a href="bookings.html">Bookings</a></li>
+    <li><a href="contact.html">Contact</a></li>
+  </ul>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <h1>Contact Us</h1>
+  <p>Have questions? Reach out to us using the form below.</p>
+</section>
+
+<!-- Contact Form -->
+<section class="contact-section">
+  <div class="contact-card">
+    <h2>Get in Touch</h2>
+    <form>
+      <input type="text" placeholder="Name" required>
+      <input type="email" placeholder="Email" required>
+      <input type="text" placeholder="Subject" required>
+      <textarea placeholder="Message" required></textarea>
+      <button type="submit">Send Message</button>
+    </form>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="footer-section">
+    <h4>About Us</h4>
+    <p>Manage all your events in one place with a simple and modern interface.</p>
+  </div>
+  <div class="footer-section">
+    <h4>Links</h4>
+    <a href="index.html">Home</a>
+    <a href="events.html">Events</a>
+    <a href="student-login.html">Student Login</a>
+    <a href="teacher-login.html">Teacher Login</a>
+    <a href="bookings.html">Bookings</a>
+    <a href="contact.html">Contact</a>
+  </div>
+  <div class="footer-section">
+    <h4>Contact</h4>
+    <p>Email: info@events.com</p>
+    <p>Phone: +91 1234567890</p>
+  </div>
+</footer>
+
+</body>
+</html>

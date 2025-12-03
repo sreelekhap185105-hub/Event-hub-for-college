@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Book Event</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  body { 
+    font-family:'Inter', sans-serif; 
+    background:#f6f0ff; 
+    display:flex; 
+    justify-content:center; 
+    align-items:center; 
+    min-height:100vh; 
+    padding:2rem; 
+  }
+  .booking-container { 
+    background:#fff; 
+    padding:2rem; 
+    border-radius:20px; 
+    box-shadow:0 10px 20px rgba(0,0,0,0.1); 
+    width:100%; 
+    max-width:500px; 
+  }
+  h1 { 
+    font-size:2rem; 
+    margin-bottom:1.5rem; 
+    text-align:center; 
+    background:linear-gradient(90deg,#4e54c8,#8f94fb); 
+    -webkit-background-clip:text; 
+    -webkit-text-fill-color:transparent; 
+  }
+  form { display:flex; flex-direction:column; gap:1rem; }
+  input { padding:0.8rem 1rem; border-radius:10px; border:1px solid #ccc; font-size:1rem; }
+  input[disabled] { background:#eee; color:#555; }
+  button { padding:0.8rem 1rem; border:none; border-radius:50px; font-weight:600; cursor:pointer; background:#4e54c8; color:#fff; transition:0.3s; }
+  button:hover { background:#8f94fb; }
+  p.message { color:red; font-size:0.9rem; }
+</style>
+</head>
+<body>
+
+<div class="booking-container">
+  <h1>Book Event</h1>
+  <form id="bookingForm">
+    <input type="text" id="studentName" placeholder="Your Name" disabled required>
+    <input type="text" id="eventName" placeholder="Event Name" disabled required>
+    <input type="email" id="email" placeholder="Enter your Email" required>
+    <input type="tel" id="phone" placeholder="Enter your Phone Number" required pattern="[0-9]{10}">
+    <input type="text" id="studentClass" placeholder="Enter your Class" required>
+    <button type="submit">Confirm Booking</button>
+    <p class="message" id="errorMessage"></p>
+  </form>
+</div>
+
+<script>
+  const studentNameInput = document.getElementById('studentName');
+  const eventNameInput = document.getElementById('eventName');
+  const emailInput = document.getElementById('email');
+  const phoneInput = document.getElementById('phone');
+  const classInput = document.getElementById('studentClass');
+  const errorMessage = document.getElementById('errorMessage');
+
+  // Autofill student name & selected event
+  const studentName = localStorage.getItem('studentName');
+  const selectedEvent = JSON.parse(localStorage.getItem('selectedEvent'));
+
+  if(!studentName || !selectedEvent){
+    alert("No event selected. Redirecting to Events page.");
+    window.location.href = 'events.html';
+  } else {
+    studentNameInput.value = studentName;
+    eventNameInput.value = selectedEvent.name;
+  }
+
+  document.getElementById('bookingForm').addEventListener('submit', function(e){
+    e.preventDefault();
+    errorMessage.innerText = '';
+
+    const email = emailInput.value.trim();
+    const phone = phoneInput.value.trim();
+    const studentClass = classInput.value.trim();
+
+    if(!email || !phone || !studentClass){
+      errorMessage.innerText = 'Please fill all fields.';
+      return;
+    }
+
+    if(!/^\d{10}$/.test(phone)){
+      errorMessage.innerText = 'Phone number must be 10 digits.';
+      return;
+    }
+
+    // Save booking
+    let bookingsList = JSON.parse(localStorage.getItem('bookingsList')) || [];
+    bookingsList.push({
+      student: studentName,
+      event: selectedEvent.name,
+      email: email,
+      phone: phone,
+      studentClass: studentClass,
+      date: selectedEvent.date,
+      time: selectedEvent.time,
+      venue: selectedEvent.venue,
+      qrCode: Math.random().toString(36).substring(2,10)
+    });
+    localStorage.setItem('bookingsList', JSON.stringify(bookingsList));
+
+    // Redirect to confirmation
+    window.location.href = 'booking-confirmation.html';
+  });
+</script>
+
+<script>
+
+const API_BASE = (window.API_BASE || 'http://localhost:5000');
+function getParam(name) { return new URLSearchParams(location.search).get(name); }
+const evId = parseInt(getParam('event_id'));
+const bookForm = document.querySelector('form');
+if (bookForm) {
+  bookForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const auth = JSON.parse(localStorage.getItem('auth')||'{}');
+    const student_id = auth?.user?.id || 2;
+    const res = await fetch(API_BASE + '/api/bookings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event_id: evId, student_id })
+    });
+    const out = await res.json();
+    if (res.ok) {
+      window.location.href = 'booking-confirmation.html?booking_id=' + out.booking_id;
+    } else {
+      alert(out.error || 'Booking failed');
+    }
+  });
+}
+
+</script>
+</body>
+</html>

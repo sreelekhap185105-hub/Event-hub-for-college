@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Event Management System</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  body {
+    font-family:'Inter', sans-serif;
+    background: linear-gradient(135deg,#4e54c8,#8f94fb);
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:100vh;
+    margin:0;
+    color:#fff;
+  }
+  .container {
+    background:#fff;
+    color:#1a1a1a;
+    padding:3rem 2rem;
+    border-radius:20px;
+    box-shadow:0 15px 35px rgba(0,0,0,0.2);
+    text-align:center;
+    width:350px;
+  }
+  h1 {
+    font-size:2rem;
+    margin-bottom:0.5rem;
+    background:linear-gradient(90deg,#4e54c8,#8f94fb);
+    -webkit-background-clip:text;
+    -webkit-text-fill-color:transparent;
+  }
+  p.tagline {
+    font-size:1rem;
+    color:#555;
+    margin-bottom:2rem;
+  }
+  .btn {
+    display:block;
+    width:100%;
+    padding:1rem;
+    margin:1rem 0;
+    border:none;
+    border-radius:50px;
+    font-size:1rem;
+    font-weight:600;
+    cursor:pointer;
+    color:#fff;
+    transition:0.3s;
+  }
+  .login-btn { background:#4e54c8; }
+  .login-btn:hover { background:#8f94fb; transform:scale(1.05); }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Event Management System</h1>
+  <p class="tagline">Organize, manage, and book events seamlessly. Click below to login.</p>
+  <button class="btn login-btn" onclick="location.href='login.html'">Login</button>
+</div>
+
+<script>
+
+const API_BASE = (window.API_BASE || 'http://localhost:5000');
+async function loadEvents() {
+  const res = await fetch(API_BASE + '/api/events');
+  const events = await res.json();
+  const container = document.getElementById('event-list') || document.body;
+  events.forEach(ev => {
+    const div = document.createElement('div');
+    div.style.border = '1px solid #ddd'; div.style.padding='8px'; div.style.margin='8px 0';
+    div.innerHTML = `<strong>${ev.title}</strong> @ ${ev.venue || 'TBA'}<br/><small>${ev.start_time}</small><br/>
+      <a href="booking-form.html?event_id=${ev.id}">Book</a>`;
+    container.appendChild(div);
+  });
+}
+loadEvents();
+
+</script>
+</body>
+</html>

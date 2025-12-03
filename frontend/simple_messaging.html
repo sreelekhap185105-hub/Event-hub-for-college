@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Group Chat — Event Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --accent: #0066ff;
+    --accent-2: #7f00ff;
+    --muted: #6b6b6b;
+    --bg: #f4f7ff;
+    --card: #ffffff;
+    --me-bg-start: #d9e9ff;
+    --me-bg-end: #cfe3ff;
+    --other-start: #f6eaff;
+    --other-end: #e6f8f7;
+    --shadow: 0 8px 30px rgba(20,20,50,0.06);
+    --teacher-badge-bg: #ffecb3;
+    --teacher-badge-color: #7a4b00;
+  }
+  html,body{height:100%}
+  body { font-family: 'Poppins', sans-serif; margin:0; background:var(--bg); color:#111; display:flex; align-items:center; justify-content:center; }
+  body.overlay-mode { background: transparent; align-items:stretch; justify-content:flex-start; padding:24px; }
+  .app { width:100%; max-width:980px; height:86vh; background:var(--card); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; display:flex; }
+  body.overlay-mode .app { width:94%; max-width:920px; height:86vh; margin: 0 auto; border-radius:12px; }
+
+  /* left sidebar slightly smaller (220px) per request */
+  .sidebar { width:220px; border-right:1px solid #eef2ff; padding:18px; background:linear-gradient(180deg,#fff,#fbfbff); box-sizing:border-box; }
+  .profile { display:flex; gap:12px; align-items:center; margin-bottom:12px; }
+  .avatar { width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#8fb6ff,#7f00ff);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:18px; box-shadow: 0 6px 18px rgba(50,80,200,0.12);}
+  .info strong{display:block;font-size:18px}
+  .info .small{color:var(--muted);font-size:13px}
+
+  .top-actions { display:flex; gap:8px; margin-top:6px; flex-wrap:wrap; }
+  .top-actions button { padding:8px 10px; border-radius:8px; border:1px solid #f0f0ff; background:#fff; cursor:pointer; font-weight:600; box-shadow: 0 4px 12px rgba(20,40,80,0.03); }
+  .top-actions button:hover { transform: translateY(-2px); }
+
+  .small-note { font-size:13px; color:var(--muted); margin-top:12px; line-height:1.45; }
+
+  .main { flex:1; display:flex; flex-direction:column; }
+  .header { padding:14px 18px; border-bottom:1px solid #f3f3f6; display:flex; align-items:center; gap:12px; background: linear-gradient(90deg,#ffffff, #fbfdff); }
+  .chat-title { font-weight:800; font-size:18px; color: #172554; letter-spacing:0.2px; }
+  .unseen-badge { margin-left:auto; font-weight:700; font-size:13px; color:#fff; background: #ff6b6b; padding:6px 10px; border-radius:20px; box-shadow: 0 6px 18px rgba(255,100,100,0.12); }
+
+  .typing-indicator { margin-left:12px; color:#6a6a9a; font-size:13px; font-weight:600; opacity:0.95; }
+
+  /* make chat area slightly larger by reducing sidebar width */
+  .messages { flex:1; padding:20px; overflow:auto; background: linear-gradient(180deg,#fbfdff,#f3f7ff); display:flex; flex-direction:column; gap:10px; }
+  .msg-row { display:flex; gap:12px; align-items:flex-end; }
+  .msg-row.me { justify-content:flex-end; }
+  .msg-avatar { width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,#8fb6ff,#7f00ff); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; flex-shrink:0; box-shadow: 0 6px 18px rgba(50,80,200,0.06); }
+  .bubble {
+    /* slightly increased max width so chat area looks bigger */
+    max-width:80%;
+    padding:12px 14px;
+    border-radius:14px;
+    position:relative;
+    box-shadow: 0 6px 20px rgba(40,50,80,0.04);
+    transform-origin: left bottom;
+    animation: slideUp 240ms cubic-bezier(.2,.9,.3,1);
+    word-wrap: break-word;
+    line-height:1.38;
+  }
+  @keyframes slideUp { from { opacity:0; transform: translateY(8px) scale(0.985);} to { opacity:1; transform: translateY(0) scale(1);} }
+
+  .bubble.me { background: linear-gradient(135deg,var(--me-bg-start),var(--me-bg-end)); border:1px solid rgba(0,100,255,0.12); color:#08205b; }
+  .bubble.me::after { content:""; position:absolute; right:-8px; bottom:8px; width:14px; height:16px; background: linear-gradient(135deg,var(--me-bg-start),var(--me-bg-end)); transform: rotate(18deg); border-bottom-left-radius:6px; }
+  .bubble.other { background: linear-gradient(135deg,var(--other-start),var(--other-end)); border:1px solid rgba(125,0,255,0.08); color:#2b0b3a; }
+  .bubble.other::after { content:""; position:absolute; left:-8px; bottom:8px; width:14px; height:16px; background: linear-gradient(135deg,var(--other-start),var(--other-end)); transform: rotate(-18deg); border-bottom-right-radius:6px; }
+
+  .meta { display:flex; gap:8px; align-items:center; margin-bottom:8px; font-size:13px; color:#2a2a4a; }
+  .meta .name { font-weight:700; color:#13204a; }
+  .meta .role { font-weight:600; color:#6b6b9c; font-size:12px; }
+  .meta .time { margin-left:auto; font-size:11px; color:#8b8bb0; }
+  /* teacher badge */
+  .teacher-badge { margin-left:6px; padding:4px 8px; font-size:11px; font-weight:800; border-radius:12px; background:var(--teacher-badge-bg); color:var(--teacher-badge-color); border:1px solid rgba(0,0,0,0.04); }
+
+  .ts { display:block; color:#7d7d9a; font-size:11px; margin-top:6px; text-align:right; opacity:0.95; }
+
+  /* reactions row */
+  .reactions { margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; }
+  .reaction { background:rgba(255,255,255,0.9); padding:4px 8px; border-radius:999px; font-weight:700; font-size:13px; border:1px solid rgba(0,0,0,0.06); cursor:pointer; display:inline-flex; gap:6px; align-items:center; }
+  .reaction .count { font-weight:800; color:#333; }
+  .reaction.self { box-shadow: 0 6px 18px rgba(0,100,255,0.06); border-color: rgba(0,100,255,0.12); }
+
+  /* message controls */
+  .msg-controls { display:flex; gap:8px; margin-left:8px; align-items:center; }
+  .msg-btn { border:none; background:transparent; cursor:pointer; font-size:14px; color:#6a6a8a; padding:4px; border-radius:8px; }
+  .msg-btn:hover { background:rgba(0,0,0,0.03); transform: translateY(-1px); }
+
+  .composer { padding:12px 18px; border-top:1px solid #eef3ff; display:flex; gap:10px; align-items:center; background:var(--card); }
+  .composer input { flex:1; padding:12px 14px; border-radius:999px; border:1px solid #e7ebff; outline:none; font-size:14px; box-shadow: 0 6px 18px rgba(50,70,150,0.03); }
+  .composer input:focus { border-color: rgba(0,110,255,0.35); box-shadow: 0 8px 30px rgba(0,110,255,0.06); }
+  .composer button { padding:10px 16px; border-radius:999px; border:none; background: linear-gradient(90deg,#0066ff,#00a3ff); color:#fff; cursor:pointer; font-weight:700; box-shadow: 0 10px 30px rgba(0,100,255,0.12); }
+  .composer button:hover { transform: translateY(-2px); }
+
+  .unseen { outline: 3px solid rgba(255,215,90,0.25); border-radius: 14px; }
+
+  /* emoji picker (tiny) */
+  .emoji-picker { display:flex; gap:8px; background: #fff; border:1px solid #eef0ff; padding:6px; border-radius:10px; box-shadow: 0 8px 30px rgba(20,40,120,0.06); }
+  .emoji-picker button { border:none; background:transparent; font-size:18px; cursor:pointer; }
+
+  /* edit input */
+  .edit-input { width:100%; padding:8px 10px; border-radius:8px; border:1px solid #e9eefc; }
+
+  @media (max-width:720px) {
+    .sidebar{display:none}
+    .app{height:96vh;max-width:98vw}
+    body.overlay-mode .app{width:96vw;height:92vh;}
+    .bubble { max-width:86%; }
+  }
+</style>
+</head>
+<body>
+  <div class="app" role="application" aria-label="Group chat" id="groupChatApp">
+    <aside class="sidebar" aria-hidden="false" id="leftSidebar">
+      <div class="profile">
+        <div class="avatar" id="avatar">U</div>
+        <div class="info">
+          <strong id="displayName">User</strong>
+          <div class="small" id="displayRole">Role</div>
+        </div>
+      </div>
+
+      <div class="top-actions">
+        <button id="refreshBtn">Refresh</button>
+        <button id="clearBtn">Clear</button>
+        <button id="logoutBtn">Logout</button>
+      </div>
+
+      <div class="small-note">This is a single group for events and announcements. Messages are stored locally in your browser. Use Enter to send, Shift+Enter for newline.</div>
+    </aside>
+
+    <main class="main">
+      <div class="header">
+        <div class="chat-title">Group Chat</div>
+        <div id="typingIndicator" class="typing-indicator" aria-live="polite" style="display:none">someone is typing…</div>
+        <div id="unseenInfo" class="unseen-badge" aria-live="polite" style="margin-left:auto">0 new</div>
+      </div>
+
+      <div class="messages" id="messages" aria-live="polite" aria-relevant="additions"></div>
+
+      <div class="composer" role="region" aria-label="Write a message">
+        <input id="msgInput" autocomplete="off" placeholder="Type a message... (Enter to send)" />
+        <div style="display:flex; gap:8px; align-items:center;">
+          <!-- global plus button (opens emoji picker) -->
+          <button id="emojiBtn" title="Add reaction">+</button>
+          <button id="sendBtn" title="Send message">Send</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+<script>
+/* Client-only group chat (UI edits made: plus symbol for reaction trigger, smaller sidebar, teacher badge).
+   All logic, storage keys and features preserved. */
+
+// login guard (unchanged)
+const username = localStorage.getItem('username');
+const role = localStorage.getItem('role');
+if (!username) { window.location.href = 'login.html'; }
+
+// elements and constants
+const STORAGE_KEY = 'ev_group_chat_v1';
+const TYPING_KEY = 'ev_group_chat_typing';
+const displayNameEl = document.getElementById('displayName');
+const displayRoleEl = document.getElementById('displayRole');
+const avatarEl = document.getElementById('avatar');
+const messagesEl = document.getElementById('messages');
+const msgInput = document.getElementById('msgInput');
+const sendBtn = document.getElementById('sendBtn');
+const refreshBtn = document.getElementById('refreshBtn');
+const clearBtn = document.getElementById('clearBtn');
+const logoutBtn = document.getElementById('logoutBtn');
+const unseenInfo = document.getElementById('unseenInfo');
+const typingIndicator = document.getElementById('typingIndicator');
+const emojiBtn = document.getElementById('emojiBtn');
+
+displayNameEl.textContent = username;
+displayRoleEl.textContent = role ? role.charAt(0).toUpperCase()+role.slice(1) : '';
+avatarEl.textContent = (username[0] || 'U').toUpperCase();
+
+// helpers
+function loadMessages(){ try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch(e){ return []; } }
+function saveMessages(arr){ localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); }
+function nextId(){ return Date.now() + Math.floor(Math.random()*1000); }
+function fmtTimeShort(ts){ return new Date(ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
+
+// incremental rendering
+let lastStateHash = '';
+function stateHash(arr){
+  if(!arr.length) return 'empty';
+  const latest = arr[arr.length-1];
+  return arr.length + '|' + latest.timestamp + '|' + arr.slice(-8).map(m=>m.text.length + JSON.stringify(m.reactions||{})).join(';');
+}
+
+// build message node (adds teacher badge if role === 'teacher')
+function buildMessageNode(m){
+  const row = document.createElement('div');
+  row.className = 'msg-row ' + (m.from === username ? 'me' : 'other');
+  row.dataset.id = m.id;
+
+  const avatar = document.createElement('div');
+  avatar.className = 'msg-avatar';
+  avatar.textContent = (m.from && m.from[0]) ? m.from[0].toUpperCase() : '?';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble ' + (m.from === username ? 'me' : 'other');
+
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  const nameEl = document.createElement('span'); nameEl.className='name'; nameEl.textContent = m.from;
+  const roleEl = document.createElement('span'); roleEl.className='role'; roleEl.textContent = m.role;
+
+  meta.appendChild(nameEl);
+  meta.appendChild(roleEl);
+
+  // teacher badge (visible if sender role is teacher)
+  if(m.role && m.role.toLowerCase() === 'teacher'){
+    const tbadge = document.createElement('span');
+    tbadge.className = 'teacher-badge';
+    tbadge.textContent = 'TEACHER';
+    meta.appendChild(tbadge);
+  }
+
+  const timeEl = document.createElement('span'); timeEl.className='time'; timeEl.textContent = fmtTimeShort(m.timestamp);
+  meta.appendChild(timeEl);
+
+  const body = document.createElement('div'); body.className='body-text'; body.textContent = m.text;
+
+  bubble.appendChild(meta);
+  bubble.appendChild(body);
+
+  // reactions
+  const reactionsRow = document.createElement('div'); reactionsRow.className='reactions';
+  if(m.reactions){
+    for(const emoji of Object.keys(m.reactions)){
+      const users = m.reactions[emoji];
+      const rbtn = document.createElement('button');
+      rbtn.className = 'reaction' + (users.includes(username) ? ' self' : '');
+      rbtn.innerHTML = `${emoji} <span class="count">${users.length}</span>`;
+      rbtn.title = users.join(', ');
+      rbtn.addEventListener('click', (e)=>{ e.stopPropagation(); toggleReaction(m.id, emoji); });
+      reactionsRow.appendChild(rbtn);
+    }
+  }
+
+  // controls: plus (reaction), and edit/delete for sender
+  const controlsWrap = document.createElement('div'); controlsWrap.className='msg-controls';
+  const addPlus = document.createElement('button'); addPlus.className='msg-btn'; addPlus.title='React'; addPlus.textContent='+';
+  addPlus.addEventListener('click', (ev)=>{ ev.stopPropagation(); showInlineEmojiPicker(m.id, addPlus); });
+  controlsWrap.appendChild(addPlus);
+
+  if(m.from === username){
+    const editBtn = document.createElement('button'); editBtn.className='msg-btn'; editBtn.innerHTML='✏️'; editBtn.title='Edit';
+    editBtn.addEventListener('click', (ev)=>{ ev.stopPropagation(); startEditMessage(m.id); });
+    const delBtn = document.createElement('button'); delBtn.className='msg-btn'; delBtn.innerHTML='🗑️'; delBtn.title='Delete';
+    delBtn.addEventListener('click', (ev)=>{ ev.stopPropagation(); deleteMessage(m.id); });
+    controlsWrap.appendChild(editBtn); controlsWrap.appendChild(delBtn);
+  }
+
+  // assemble left/right layout
+  if(m.from === username){
+    row.appendChild(bubble);
+    row.appendChild(controlsWrap);
+    row.appendChild(avatar);
+  } else {
+    row.appendChild(avatar);
+    row.appendChild(bubble);
+    row.appendChild(controlsWrap);
+  }
+
+  bubble.appendChild(reactionsRow);
+
+  if(!m.seen && m.from !== username) bubble.classList.add('unseen');
+
+  return row;
+}
+
+// render with diff
+function renderMessages(){
+  const arr = loadMessages().slice().sort((a,b)=>a.timestamp - b.timestamp);
+  const hash = stateHash(arr);
+  if(hash === lastStateHash) return;
+  lastStateHash = hash;
+
+  const existing = new Map();
+  Array.from(messagesEl.children).forEach(c=>{ if(c.dataset.id) existing.set(c.dataset.id, c); });
+
+  const frag = document.createDocumentFragment();
+  for(const m of arr){
+    let node = existing.get(String(m.id));
+    if(node){
+      const key = m.text + '||' + JSON.stringify(m.reactions || {});
+      if(node._sig !== key || (!m.seen && !node.querySelector('.bubble').classList.contains('unseen'))){
+        node = buildMessageNode(m);
+      }
+      node._sig = m.text + '||' + JSON.stringify(m.reactions || {});
+      existing.delete(String(m.id));
+    } else {
+      node = buildMessageNode(m);
+      node._sig = m.text + '||' + JSON.stringify(m.reactions || {});
+    }
+    frag.appendChild(node);
+  }
+
+  messagesEl.innerHTML = '';
+  messagesEl.appendChild(frag);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+
+  const unseenCount = arr.filter(m => !m.seen && m.from !== username).length;
+  unseenInfo.textContent = unseenCount ? (unseenCount + ' new') : '0 new';
+}
+
+// core ops (send/edit/delete/react)
+function sendMessage(){
+  const text = msgInput.value.trim();
+  if(!text) return;
+  const arr = loadMessages();
+  arr.push({ id: nextId(), from: username, role: role || 'student', text, timestamp: Date.now(), seen: true, reactions: {} });
+  saveMessages(arr);
+  msgInput.value = '';
+  notifyTyping(false);
+  renderMessages();
+}
+
+function deleteMessage(id){
+  if(!confirm('Delete this message?')) return;
+  const arr = loadMessages().filter(m => String(m.id) !== String(id));
+  saveMessages(arr);
+  renderMessages();
+}
+
+function startEditMessage(id){
+  const node = messagesEl.querySelector(`[data-id="${id}"]`);
+  if(!node) return;
+  const bubble = node.querySelector('.bubble');
+  const body = bubble.querySelector('.body-text');
+  const oldText = body.textContent;
+  const editInput = document.createElement('textarea'); editInput.className='edit-input'; editInput.value=oldText; editInput.rows=3;
+  bubble.replaceChild(editInput, body);
+  editInput.focus();
+
+  const saveBtn = document.createElement('button'); saveBtn.textContent='Save'; saveBtn.className='msg-btn';
+  const cancelBtn = document.createElement('button'); cancelBtn.textContent='Cancel'; cancelBtn.className='msg-btn';
+  const ctrl = document.createElement('div'); ctrl.style.marginTop='8px'; ctrl.appendChild(saveBtn); ctrl.appendChild(cancelBtn);
+  bubble.appendChild(ctrl);
+
+  saveBtn.addEventListener('click', ()=>{
+    const newText = editInput.value.trim();
+    if(newText === '') { alert('Message cannot be empty'); return; }
+    const arr = loadMessages();
+    for(const m of arr){ if(String(m.id) === String(id)){ m.text = newText; m.timestamp = Date.now(); break; } }
+    saveMessages(arr);
+    renderMessages();
+  });
+  cancelBtn.addEventListener('click', ()=> renderMessages());
+}
+
+// reactions data & UI
+const EMOJIS = ['👍','❤️','😂','🎉','😮'];
+function showInlineEmojiPicker(messageId, anchor){
+  const existing = document.getElementById('emoji-picker-popup');
+  if(existing) existing.remove();
+  const popup = document.createElement('div'); popup.id='emoji-picker-popup'; popup.className='emoji-picker'; popup.style.position='absolute'; popup.style.zIndex=9999;
+  EMOJIS.forEach(e=>{
+    const b = document.createElement('button'); b.textContent = e;
+    b.addEventListener('click', (ev)=>{ ev.stopPropagation(); toggleReaction(messageId, e); popup.remove(); });
+    popup.appendChild(b);
+  });
+  document.body.appendChild(popup);
+  const rect = anchor.getBoundingClientRect();
+  popup.style.left = (rect.left) + 'px';
+  popup.style.top = (rect.bottom + 8) + 'px';
+  setTimeout(()=> { const onDoc=(ev)=>{ if(!popup.contains(ev.target)) { popup.remove(); document.removeEventListener('click', onDoc); } }; document.addEventListener('click', onDoc); },20);
+}
+
+function toggleReaction(messageId, emoji){
+  const arr = loadMessages();
+  for(const m of arr){
+    if(String(m.id) === String(messageId)){
+      if(!m.reactions) m.reactions = {};
+      if(!m.reactions[emoji]) m.reactions[emoji] = [];
+      const idx = m.reactions[emoji].indexOf(username);
+      if(idx === -1) m.reactions[emoji].push(username);
+      else m.reactions[emoji].splice(idx,1);
+      if(m.reactions[emoji].length === 0) delete m.reactions[emoji];
+      break;
+    }
+  }
+  saveMessages(arr);
+  renderMessages();
+}
+
+// typing indicator (localStorage)
+let typingTimeout = null;
+function notifyTyping(on){
+  if(on) localStorage.setItem(TYPING_KEY, JSON.stringify({user: username, ts: Date.now()}));
+  else try{ localStorage.removeItem(TYPING_KEY);}catch(e){}
+}
+msgInput.addEventListener('input', ()=>{
+  notifyTyping(true);
+  if(typingTimeout) clearTimeout(typingTimeout);
+  typingTimeout = setTimeout(()=>{ notifyTyping(false); }, 1200);
+});
+
+// polling
+let pollIntervalId = null;
+function pollLoop(){
+  const t = localStorage.getItem(TYPING_KEY);
+  let showTyping = false;
+  if(t){
+    try {
+      const obj = JSON.parse(t);
+      if(obj.user && obj.user !== username && (Date.now() - obj.ts) < 3000){
+        typingIndicator.style.display = 'inline-block';
+        typingIndicator.textContent = obj.user + ' is typing...';
+        showTyping = true;
+      }
+    } catch(e){}
+  }
+  if(!showTyping) typingIndicator.style.display = 'none';
+  renderMessages();
+}
+if(!pollIntervalId) pollIntervalId = setInterval(pollLoop, 900);
+
+// handlers
+sendBtn.addEventListener('click', sendMessage);
+msgInput.addEventListener('keydown', (e)=> { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); } });
+refreshBtn.addEventListener('click', renderMessages);
+clearBtn.addEventListener('click', ()=> { if(!confirm('Clear all messages in this browser?')) return; localStorage.removeItem(STORAGE_KEY); renderMessages(); });
+logoutBtn.addEventListener('click', ()=> { localStorage.removeItem('username'); localStorage.removeItem('role'); window.location.href = 'login.html'; });
+
+// global plus opens fixed picker that inserts emoji into input
+emojiBtn.addEventListener('click', (ev)=> {
+  const existing = document.getElementById('global-emoji-picker');
+  if(existing) { existing.remove(); return; }
+  const popup = document.createElement('div'); popup.id='global-emoji-picker'; popup.className='emoji-picker';
+  popup.style.position='fixed'; popup.style.right='36px'; popup.style.bottom='86px';
+  EMOJIS.forEach(e=>{
+    const b = document.createElement('button'); b.textContent = e;
+    b.addEventListener('click', ()=> { insertAtCaret(msgInput, e + ' '); popup.remove(); msgInput.focus(); });
+    popup.appendChild(b);
+  });
+  document.body.appendChild(popup);
+  setTimeout(()=> { const onDoc=(e)=>{ if(!popup.contains(e.target)) { popup.remove(); document.removeEventListener('click', onDoc); } }; document.addEventListener('click', onDoc); },20);
+});
+
+function insertAtCaret(input, text){
+  const start = input.selectionStart || 0; const end = input.selectionEnd || 0; const val = input.value;
+  input.value = val.slice(0,start) + text + val.slice(end);
+  input.selectionStart = input.selectionEnd = start + text.length;
+}
+
+// mark unseen as seen when focus or click
+window.addEventListener('focus', ()=> { markAllSeen(); renderMessages(); });
+messagesEl.addEventListener('click', ()=> { markAllSeen(); renderMessages(); });
+
+function markAllSeen(){
+  const arr = loadMessages(); let changed=false;
+  for(const m of arr){ if(!m.seen && m.from !== username){ m.seen=true; changed=true; } }
+  if(changed) saveMessages(arr);
+}
+
+// initial
+markAllSeen();
+renderMessages();
+
+</script>
+</body>
+</html>

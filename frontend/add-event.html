@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Add Event - Event Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  body { font-family:'Inter', sans-serif; background:#f6f0ff; display:flex; justify-content:center; align-items:center; min-height:100vh; padding:2rem; }
+  .event-container { background:#fff; padding:2rem; border-radius:20px; box-shadow:0 10px 20px rgba(0,0,0,0.1); width:100%; max-width:500px; }
+  h1 { font-size:2rem; margin-bottom:1.5rem; text-align:center; background:linear-gradient(90deg,#4e54c8,#8f94fb); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  form { display:flex; flex-direction:column; gap:1rem; }
+  input, textarea { padding:0.8rem 1rem; border-radius:10px; border:1px solid #ccc; font-size:1rem; }
+  button { padding:0.8rem 1rem; border:none; border-radius:50px; font-weight:600; cursor:pointer; background:#4e54c8; color:#fff; transition:0.3s; }
+  button:hover { background:#8f94fb; }
+  p.message { color:red; font-size:0.9rem; text-align:center; }
+  #previewImg { width:100%; border-radius:10px; display:none; margin-top:0.5rem; }
+</style>
+</head>
+<body>
+
+<div class="event-container">
+  <h1 id="formTitle">Add New Event</h1>
+  <form id="eventForm">
+    <input type="text" id="eventName" placeholder="Event Name" required>
+    <textarea id="eventDesc" placeholder="Event Description" rows="3" required></textarea>
+    <input type="date" id="eventDate" required>
+    <input type="time" id="eventTime" required>
+    <input type="text" id="eventVenue" placeholder="Event Venue" required>
+    <input type="file" id="eventImageFile" accept="image/*">
+    <img id="previewImg">
+    <button type="submit">Save Event</button>
+    <p class="message" id="message"></p>
+  </form>
+</div>
+
+<script>
+const eventForm = document.getElementById('eventForm');
+const message = document.getElementById('message');
+const formTitle = document.getElementById('formTitle');
+const imageFileInput = document.getElementById('eventImageFile');
+const previewImg = document.getElementById('previewImg');
+
+let eventsList = JSON.parse(localStorage.getItem('eventsList')) || [];
+const editIndex = localStorage.getItem('editEventIndex');
+let existingImage = ''; // base64 image if editing
+
+if(editIndex !== null){
+  const eventToEdit = eventsList[editIndex];
+  document.getElementById('eventName').value = eventToEdit.name;
+  document.getElementById('eventDesc').value = eventToEdit.description;
+  document.getElementById('eventDate').value = eventToEdit.date;
+  document.getElementById('eventTime').value = eventToEdit.time;
+  document.getElementById('eventVenue').value = eventToEdit.venue;
+  existingImage = eventToEdit.image || '';
+  if(existingImage){
+    previewImg.src = existingImage;
+    previewImg.style.display = 'block';
+  }
+  formTitle.innerText = "Edit Event";
+}
+
+// Preview image when uploading
+imageFileInput.addEventListener('change', function() {
+  const file = this.files[0];
+  if(file){
+    const reader = new FileReader();
+    reader.onload = function(e){
+      previewImg.src = e.target.result;
+      previewImg.style.display = 'block';
+    }
+    reader.readAsDataURL(file);
+  }
+});
+
+// Convert file to base64
+function getBase64(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = error => reject(error);
+    reader.readAsDataURL(file);
+  });
+}
+
+eventForm.addEventListener('submit', async function(e){
+  e.preventDefault();
+  const name = document.getElementById('eventName').value.trim();
+  const desc = document.getElementById('eventDesc').value.trim();
+  const date = document.getElementById('eventDate').value;
+  const time = document.getElementById('eventTime').value;
+  const venue = document.getElementById('eventVenue').value.trim();
+
+  if(!name || !desc || !date || !time || !venue){
+    message.innerText = "Please fill all required fields!";
+    return;
+  }
+
+  let image = existingImage;
+  if(imageFileInput.files.length > 0){
+    try { image = await getBase64(imageFileInput.files[0]); }
+    catch(err){ console.error("Image conversion error", err); }
+  }
+
+  const eventData = { name, description: desc, date, time, venue, image };
+
+  if(editIndex !== null){
+    eventsList[editIndex] = eventData;
+    localStorage.removeItem('editEventIndex');
+    message.innerText = "Event updated successfully!";
+  } else {
+    eventsList.push(eventData);
+    message.innerText = "Event added successfully!";
+  }
+
+  localStorage.setItem('eventsList', JSON.stringify(eventsList));
+
+  setTimeout(()=>{ window.location.href='event.html'; }, 1000);
+});
+</script>
+
+</body>
+</html>
